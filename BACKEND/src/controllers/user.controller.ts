@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { validationResult } from "express-validator";
 import { createUser,updateUser,forgetPassword } from "../services/user.service"; // Named import
 import usermodel from "../model/user.model";
+import { success } from "zod";
 
 export const signup = async (req: Request, res: Response) => {
   const errors = validationResult(req);
@@ -26,7 +27,7 @@ export const signup = async (req: Request, res: Response) => {
     const token = newUser.generateToken();
 
     console.log("New user created:", newUser); // Debugging log
-    return res.status(201).json({ user: newUser, token });
+    return res.status(201).json({success:true, user: newUser, token });
   } catch (error: any) {
     return res.status(500).json({ message: error.message });
   }
@@ -48,12 +49,15 @@ if (!user) {
 }
 
 const passwordMatch = await user.comparePassword(password);
+console.log("Password Match:", passwordMatch);
   if(!passwordMatch){
     return res.status(401).json({ message: "Incorrect Password" });
   }
   //match found, generate token now
 
   const token = user.generateToken();
+  console.log("User logged in:", user); // Debugging
+  console.log("Generated login Token:", token); // Debugging
   return res.status(200).json({ user, token });
 };
 

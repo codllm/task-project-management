@@ -32,7 +32,7 @@ export const getNotificationsController = async (req: Request, res: Response) =>
 export const markAsReadController = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    const notificationId = req.params.notificationId;
+    const notificationId = req.params.notificationId as string;
 
     const notification = await markNotificationAsRead(notificationId, user._id);
     res.status(200).json({ success: true, notification });
