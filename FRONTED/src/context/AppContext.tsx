@@ -23,6 +23,9 @@ interface AppContextType {
   loading: boolean;
   themeColor: string;
   setThemeColor: (color: string) => Promise<void>;
+  isDarkMode: boolean;
+  setIsDarkMode: (val: boolean) => Promise<void>;
+  C: any;
   
   // Handlers
   refreshData: () => Promise<void>;
@@ -46,6 +49,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [themeColor, setThemeColorState] = useState<string>("#C2F193");
+  const [isDarkMode, setIsDarkModeState] = useState<boolean>(true);
+
+  // Themes
+  const darkTheme = {
+    bg: "#15171C",
+    card: "#1C1F26",
+    cardBorder: "#2A2E38",
+    border: "#2A2E38",
+    cardUnread: "#1F232D",
+    divider: "#232730",
+    input: "#20242C",
+    inputBorder: "#2E333D",
+    textPrimary: "#FFFFFF",
+    textSecondary: "#9DA3AE",
+    textMuted: "#6B7280",
+    textLabel: "#7A86A0",
+    accent: "#6FC3D6",
+    onAccent: "#0D2A30",
+    danger: "#E2847A",
+    dangerBg: "rgba(216,99,74,0.12)",
+    dangerBorder: "rgba(216,99,74,0.25)",
+    tagBg: "#232730",
+    tagText: "#C8CDD6",
+  };
+
+  const lightTheme = {
+    bg: "#F8F9FA",
+    card: "#FFFFFF",
+    cardBorder: "#E9ECEF",
+    border: "#E9ECEF",
+    cardUnread: "#EDF2FF",
+    divider: "#DEE2E6",
+    input: "#F1F3F5",
+    inputBorder: "#CED4DA",
+    textPrimary: "#1A1D20",
+    textSecondary: "#495057",
+    textMuted: "#868E96",
+    textLabel: "#7A86A0",
+    accent: "#6FC3D6",
+    onAccent: "#0D2A30",
+    danger: "#FA5252",
+    dangerBg: "rgba(250,82,82,0.1)",
+    dangerBorder: "rgba(250,82,82,0.2)",
+    tagBg: "#E9ECEF",
+    tagText: "#495057",
+  };
+
+  const C = isDarkMode ? darkTheme : lightTheme;
 
   // Custom setters that persist to SecureStore if needed
   const setUser = async (u: any | null) => {
@@ -71,6 +122,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await SecureStore.setItemAsync("themeColor", color);
   };
 
+  const setIsDarkMode = async (val: boolean) => {
+    setIsDarkModeState(val);
+    await SecureStore.setItemAsync("isDarkMode", val ? "true" : "false");
+  };
+
   // Initial load
   useEffect(() => {
     (async () => {
@@ -78,6 +134,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const storedToken = await SecureStore.getItemAsync("token");
         const storedUser = await SecureStore.getItemAsync("User");
         const storedTheme = await SecureStore.getItemAsync("themeColor");
+        const storedDarkMode = await SecureStore.getItemAsync("isDarkMode");
+        
+        if (storedDarkMode) {
+          setIsDarkModeState(storedDarkMode === "true");
+        }
         
         if (storedTheme) {
           setThemeColorState(storedTheme);
@@ -268,6 +329,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loading,
         themeColor,
         setThemeColor,
+        isDarkMode,
+        setIsDarkMode,
+        C,
         refreshData,
         refreshWorkspaces,
         refreshProjects,

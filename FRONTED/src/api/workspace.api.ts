@@ -11,7 +11,7 @@ export interface WorkspaceMember {
     email: string;
     profilePic?: string;
   } | string;
-  role: "owner" | "admin" | "member";
+  role: "owner" | "admin" | "member" | "viewer";
 }
 
 export interface Workspace {
@@ -20,6 +20,7 @@ export interface Workspace {
   description?: string;
   owner: string; // user ID
   members: WorkspaceMember[];
+  logoUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +33,7 @@ export interface CreateWorkspacePayload {
 export interface UpdateWorkspacePayload {
   name?: string;
   description?: string;
+  logoUrl?: string;
 }
 
 // ─── API Functions ────────────────────────────────────────────────────────────

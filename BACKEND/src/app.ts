@@ -12,6 +12,8 @@ import searchUserRoutes from "./routes/searchUser.routes";
 import notificationRoutes from "./routes/notification.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import uploadRoutes from "./routes/upload.routes";
+import activityRoutes from "./routes/activity.routes";
+import milestoneRoutes from "./routes/milestone.routes";
 
 const app = express();
 
@@ -32,5 +34,7 @@ app.use("/api/search", searchUserRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/activities", activityRoutes);
+app.use("/api/milestones", milestoneRoutes);
 
 export default app;

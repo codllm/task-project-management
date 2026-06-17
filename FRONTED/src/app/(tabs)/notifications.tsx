@@ -19,19 +19,7 @@ import {
   Notification,
 } from "../../api/notification.api";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const C = {
-  bg: "#0A0E1A",
-  card: "#111628",
-  cardUnread: "#131A2E",
-  input: "#0E1422",
-  border: "#1E2438",
-  borderSubtle: "#1A2030",
-  textPrimary: "#F0F2F8",
-  textSecondary: "#D8DCE8",
-  textMuted: "#5E6A85",
-  textLabel: "#7A86A0",
-};
+// Design tokens are fetched dynamically from useApp()
 
 // ─── Notification type config ─────────────────────────────────────────────────
 const TYPE_CONFIG: Record<string, { icon: string; iconColor: string; iconBg: string }> = {
@@ -70,7 +58,7 @@ const DEFAULT_TYPE = {
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { refreshNotifications: updateGlobalUnread, themeColor, projects, selectProject } = useApp();
+  const { refreshNotifications: updateGlobalUnread, themeColor, projects, selectProject, C } = useApp();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
@@ -272,6 +260,7 @@ function NotificationCard({
   onMarkRead: (e: any) => void;
   isLast: boolean;
 }) {
+  const { C } = useApp();
   const config = TYPE_CONFIG[item.type] ?? DEFAULT_TYPE;
   const senderName = item.sender
     ? `${item.sender.username.firstname} ${item.sender.username.lastname}`
@@ -397,6 +386,7 @@ function NotificationCard({
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 function EmptyState() {
+  const { C } = useApp();
   return (
     <View
       style={{

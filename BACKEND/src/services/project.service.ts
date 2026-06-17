@@ -16,6 +16,7 @@ interface CreateProjectPayload {
   createdBy: string;
   deadline?: Date;
   color?: string;
+  coverImageUrl?: string;
 }
 
 export const createProject = async ({
@@ -25,6 +26,7 @@ export const createProject = async ({
   createdBy,
   deadline,
   color,
+  coverImageUrl,
 }: CreateProjectPayload) => {
 
   const workspaceExists = await Workspace.findById(
@@ -42,6 +44,7 @@ export const createProject = async ({
     createdBy,
     deadline,
     color,
+    coverImageUrl,
 
     members: [
       {
@@ -85,7 +88,7 @@ export const getProjectById = async (
     .populate("members.user")
     .populate("createdBy");
 
-  if (!project) {
+  if (!project || project.isDeleted) {
     throw new Error("Project not found");
   }
 
@@ -101,6 +104,7 @@ export const getWorkspaceProjects = async (
 
   const projects = await Project.find({
     workspace: workspaceId,
+    isDeleted: { $ne: true },
   }).populate("members.user");
 
   return projects;
@@ -115,6 +119,7 @@ interface UpdateProjectPayload {
   description?: string;
   status?: "ACTIVE" | "COMPLETED" | "ARCHIVED";
   deadline?: Date;
+  coverImageUrl?: string;
 }
 
 export const updateProject = async ({
@@ -123,6 +128,7 @@ export const updateProject = async ({
   description,
   status,
   deadline,
+  coverImageUrl,
 }: UpdateProjectPayload) => {
 
   const project = await Project.findById(
@@ -149,6 +155,10 @@ export const updateProject = async ({
     project.deadline = deadline;
   }
 
+  if (coverImageUrl !== undefined) {
+    project.coverImageUrl = coverImageUrl;
+  }
+
   await project.save();
 
   return project;
@@ -169,12 +179,18 @@ export const deleteProject = async (
     throw new Error("Project not found");
   }
 
-  await Project.findByIdAndDelete(
-    projectId
+  project.isDeleted = true;
+  project.deletedAt = new Date();
+  await project.save();
+
+  // Cascade soft-delete to project tasks
+  await mongoose.model("Task").updateMany(
+    { project: projectId },
+    { $set: { isDeleted: true, deletedAt: new Date() } }
   );
 
   return {
-    message: "Project deleted successfully",
+    message: "Project soft-deleted successfully",
   };
 };
 
@@ -328,4 +344,109 @@ export const getProjectMembers = async (
   }
 
   return project.members;
+};
+
+// GET TRASH PROJECTS
+export const getTrashProjectsService = async (workspaceId: string) => {
+  const projects = await Project.find({
+    workspace: workspaceId,
+    isDeleted: true,
+  }).populate("members.user");
+
+  return projects;
+};
+
+// RESTORE PROJECT
+export const restoreProjectService = async (projectId: string) => {
+  const project = await Project.findById(projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  project.isDeleted = false;
+  project.deletedAt = undefined;
+  await project.save();
+
+  // Cascade restore to tasks
+  await mongoose.model("Task").updateMany(
+    { project: projectId },
+    { $set: { isDeleted: false, deletedAt: undefined } }
+  );
+
+  const populatedProject = await Project.findById(project._id)
+    .populate("workspace")
+    .populate("members.user")
+    .populate("createdBy");
+
+  return populatedProject;
+};
+
+// DELETE PROJECT PERMANENTLY
+export const deleteProjectPermanentlyService = async (projectId: string) => {
+  const project = await Project.findById(projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  await Project.findByIdAndDelete(projectId);
+
+  // Permanently delete task documents in this project
+  await mongoose.model("Task").deleteMany({ project: projectId });
+
+  return project;
+};
+
+// UPDATE PROJECT COLUMNS
+export const updateProjectColumns = async (projectId: string, columns: any[]) => {
+  const project = await Project.findById(projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  if (!Array.isArray(columns)) {
+    throw new Error("Columns must be an array");
+  }
+
+  for (const col of columns) {
+    if (!col.id || !col.label) {
+      throw new Error("Each column must have an id and a label");
+    }
+  }
+
+  project.columns = columns;
+  await project.save();
+
+  return Project.findById(projectId)
+    .populate("workspace")
+    .populate("members.user")
+    .populate("createdBy");
+};
+
+// UPDATE PROJECT CUSTOM FIELDS
+export const updateProjectCustomFields = async (projectId: string, customFields: any[]) => {
+  const project = await Project.findById(projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  if (!Array.isArray(customFields)) {
+    throw new Error("Custom fields must be an array");
+  }
+
+  for (const field of customFields) {
+    if (!field.name || !field.type) {
+      throw new Error("Each custom field must have a name and a type");
+    }
+    if (!["text", "number", "date", "boolean"].includes(field.type)) {
+      throw new Error(`Invalid custom field type: ${field.type}`);
+    }
+  }
+
+  project.customFields = customFields;
+  await project.save();
+
+  return Project.findById(projectId)
+    .populate("workspace")
+    .populate("members.user")
+    .populate("createdBy");
 };

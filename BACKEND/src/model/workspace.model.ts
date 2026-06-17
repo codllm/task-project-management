@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface IWorkspaceMember {
   user: mongoose.Types.ObjectId;
-  role: "owner" | "admin" | "member";
+  role: "owner" | "admin" | "member" | "viewer";
 }
 
 export interface IWorkspace extends Document {
@@ -10,6 +10,7 @@ export interface IWorkspace extends Document {
   description?: string;
   owner: mongoose.Types.ObjectId;
   members: IWorkspaceMember[];
+  logoUrl?: string;
 }
 
 const workspaceSchema = new Schema<IWorkspace>(
@@ -30,6 +31,10 @@ const workspaceSchema = new Schema<IWorkspace>(
       required: true,
     },
 
+    logoUrl: {
+      type: String,
+    },
+
     members: [
       {
         user: {
@@ -40,7 +45,7 @@ const workspaceSchema = new Schema<IWorkspace>(
 
         role: {
           type: String,
-          enum: ["owner", "admin", "member"],
+          enum: ["owner", "admin", "member", "viewer"],
           default: "member",
         },
       },

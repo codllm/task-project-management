@@ -40,6 +40,14 @@ export interface UserProfile {
   email: string;
   usertype: string;
   profilePic?: string;
+  notificationPreferences?: {
+    comments: boolean;
+    assignments: boolean;
+    mentions: boolean;
+    reminders: boolean;
+  };
+  pinnedProjects?: string[];
+  pinnedTasks?: string[];
 }
 
 // ─── API Functions ────────────────────────────────────────────────────────────
@@ -96,6 +104,62 @@ export const logoutApi = async () => {
   const res = await api.post("/api/users/logout");
   await SecureStore.deleteItemAsync("token");
   return { success: true, ...res.data };
+};
+
+export interface PreferencesPayload {
+  comments?: boolean;
+  assignments?: boolean;
+  mentions?: boolean;
+  reminders?: boolean;
+}
+
+export const updatePreferencesApi = async (payload: PreferencesPayload) => {
+  const res = await api.put("/api/users/preferences", payload);
+  return { success: true, ...res.data };
+};
+
+// Pinned Items API
+export const pinProjectApi = async (projectId: string): Promise<{ success: boolean; pinnedProjects: string[] }> => {
+  const res = await api.post(`/api/users/pin-project/${projectId}`);
+  return res.data;
+};
+
+export const pinTaskApi = async (taskId: string): Promise<{ success: boolean; pinnedTasks: string[] }> => {
+  const res = await api.post(`/api/users/pin-task/${taskId}`);
+  return res.data;
+};
+
+export const getPinnedItemsApi = async (): Promise<{ success: boolean; pinnedProjects: any[]; pinnedTasks: any[] }> => {
+  const res = await api.get("/api/users/pinned");
+  return res.data;
+};
+
+// Profile avatar and saved filters endpoints
+export const uploadAvatarApi = async (formData: FormData): Promise<{ success: boolean; avatarUrl: string; user: any }> => {
+  const res = await api.put("/api/users/profile/avatar", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return res.data;
+};
+
+export const saveFilterApi = async (payload: { name: string; project: string; query: any }): Promise<{ success: boolean; filter: any }> => {
+  const res = await api.post("/api/users/saved-filters", payload);
+  return res.data;
+};
+
+export const getSavedFiltersApi = async (projectId: string): Promise<{ success: boolean; filters: any[] }> => {
+  const res = await api.get(`/api/users/saved-filters/${projectId}`);
+  return {
+    success: res.data?.success,
+    filters: res.data?.savedFilters || [],
+  };
+};
+
+export const deleteSavedFilterApi = async (filterId: string): Promise<{ success: boolean; message: string }> => {
+  const res = await api.delete(`/api/users/saved-filters/${filterId}`);
+  return res.data;
 };
 
 export default api;

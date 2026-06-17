@@ -10,6 +10,11 @@ import {
   removeMemberFromProject,
   getProjectMembers,
   changeProjectRole,
+  getTrashProjectsService,
+  restoreProjectService,
+  deleteProjectPermanentlyService,
+  updateProjectColumns,
+  updateProjectCustomFields,
 } from "../services/project.service";
 
 
@@ -278,5 +283,57 @@ export const getProjectMembersController = async (
       message: error.message,
     });
 
+  }
+};
+
+export const getTrashProjectsController = async (req: Request, res: Response) => {
+  try {
+    const workspaceId = req.params.workspaceId as string;
+    const projects = await getTrashProjectsService(workspaceId);
+    return res.status(200).json({ success: true, projects });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message || "Failed to fetch trash projects" });
+  }
+};
+
+export const restoreProjectController = async (req: Request, res: Response) => {
+  try {
+    const projectId = req.params.projectId as string;
+    const project = await restoreProjectService(projectId);
+    return res.status(200).json({ success: true, project });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message || "Failed to restore project" });
+  }
+};
+
+export const deleteProjectPermanentlyController = async (req: Request, res: Response) => {
+  try {
+    const projectId = req.params.projectId as string;
+    await deleteProjectPermanentlyService(projectId);
+    return res.status(200).json({ success: true, message: "Project permanently deleted" });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message || "Failed to permanently delete project" });
+  }
+};
+
+export const updateProjectColumnsController = async (req: Request, res: Response) => {
+  try {
+    const projectId = req.params.projectId as string;
+    const { columns } = req.body;
+    const project = await updateProjectColumns(projectId, columns);
+    return res.status(200).json({ success: true, project });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message || "Failed to update project columns" });
+  }
+};
+
+export const updateProjectCustomFieldsController = async (req: Request, res: Response) => {
+  try {
+    const projectId = req.params.projectId as string;
+    const { customFields } = req.body;
+    const project = await updateProjectCustomFields(projectId, customFields);
+    return res.status(200).json({ success: true, project });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message || "Failed to update project custom fields" });
   }
 };

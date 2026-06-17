@@ -10,6 +10,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
@@ -19,10 +20,20 @@ import {
   addMemberToProject,
   removeMemberFromProject,
   changeProjectRole,
+  updateProject,
+  getProjectMilestones,
+  createMilestone,
+  updateMilestone,
+  deleteMilestone,
+  Milestone,
 } from "../../api/project.api";
+import { getProjectTasks, Task } from "../../api/task.api";
 import { searchUsers, SearchUserResult } from "../../api/search.api";
 import { addMemberToWorkspace } from "../../api/workspace.api";
+import { uploadFile } from "../../api/upload.api";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 const PROJECT_COLORS = ["#C2F193", "#95E0F9", "#E8D4F5", "#FED7AA", "#FFA3B1"];
 
@@ -118,6 +129,17 @@ export default function ProjectsScreen() {
   const [profileVisible, setProfileVisible] = useState(false);
   const [profileUser, setProfileUser] = useState<any>(null);
 
+  /* ── cover image & milestones & progress ── */
+  const [projectStats, setProjectStats] = useState<{[projId: string]: { completed: number; total: number }}>({});
+  const [newCoverUrl, setNewCoverUrl] = useState("");
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"members" | "milestones">("members");
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [loadingMilestones, setLoadingMilestones] = useState(false);
+  const [newMilestoneTitle, setNewMilestoneTitle] = useState("");
+  const [newMilestoneDesc, setNewMilestoneDesc] = useState("");
+  const [creatingMilestone, setCreatingMilestone] = useState(false);
+
   /* keep selProject fresh when projects refresh */
   useEffect(() => {
     if (selProject) {
@@ -125,6 +147,50 @@ export default function ProjectsScreen() {
       if (fresh) setSelProject(fresh);
     }
   }, [projects]);
+
+  /* fetch project task stats */
+  useEffect(() => {
+    const fetchAllStats = async () => {
+      const statsMap: any = {};
+      for (const proj of projects) {
+        try {
+          const res = await getProjectTasks(proj._id);
+          if (res.success && res.tasks) {
+            const total = res.tasks.length;
+            const completed = res.tasks.filter((t) => t.status === "completed").length;
+            statsMap[proj._id] = { completed, total };
+          }
+        } catch (e) {
+          console.error("Failed to fetch project tasks stats:", e);
+        }
+      }
+      setProjectStats(statsMap);
+    };
+    if (projects.length > 0) {
+      fetchAllStats();
+    }
+  }, [projects]);
+
+  /* fetch milestones when settings project or settingsTab changes */
+  useEffect(() => {
+    if (selProject && settingsTab === "milestones") {
+      loadMilestones(selProject._id);
+    }
+  }, [selProject, settingsTab]);
+
+  const loadMilestones = async (projId: string) => {
+    setLoadingMilestones(true);
+    try {
+      const res = await getProjectMilestones(projId);
+      if (res.success) {
+        setMilestones(res.milestones);
+      }
+    } catch (e) {
+      console.error("Failed to load milestones:", e);
+    } finally {
+      setLoadingMilestones(false);
+    }
+  };
 
   /* debounced global search */
   useEffect(() => {
@@ -149,6 +215,7 @@ export default function ProjectsScreen() {
     setSelProject(project);
     setQuery("");
     setGlobalResults([]);
+    setSettingsTab("members");
     setManageVisible(true);
   }
 
@@ -172,6 +239,12 @@ export default function ProjectsScreen() {
   });
 
   const isOwnerOfSelected = getProjectCreatorId(selProject) === user?._id;
+  const wsMember = activeWorkspace?.members?.find((m: any) => getUserId(m.user) === user?._id);
+  const isWorkspaceViewer = wsMember?.role === "viewer";
+  const projMember = selProject?.members?.find((m: any) => getUserId(m.user) === user?._id);
+  const isProjectViewer = projMember?.role === "viewer";
+  const isViewer = isWorkspaceViewer || isProjectViewer;
+
 
   /* ══ HANDLERS ══════════════════════════════════════════════ */
 
@@ -179,9 +252,15 @@ export default function ProjectsScreen() {
     if (!activeWorkspace || !newName.trim()) { Alert.alert("Required", "Project name is required."); return; }
     setCreating(true);
     try {
-      const res = await createProject({ name: newName.trim(), description: newDesc.trim() || undefined, workspace: activeWorkspace._id, color: newColor });
+      const res = await createProject({
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+        workspace: activeWorkspace._id,
+        color: newColor,
+        coverImageUrl: newCoverUrl || undefined,
+      });
       if (res.success) {
-        setNewName(""); setNewDesc(""); setNewColor("#C2F193");
+        setNewName(""); setNewDesc(""); setNewColor("#C2F193"); setNewCoverUrl("");
         setCreateVisible(false);
         await refreshProjects();
       }
@@ -189,6 +268,101 @@ export default function ProjectsScreen() {
       Alert.alert("Error", err?.response?.data?.message ?? "Failed to create project.");
     } finally { setCreating(false); }
   }
+
+  const pickCoverImage = async (isNewProject: boolean) => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert("Permission denied", "Media library access required."); return; }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [3, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        setUploadingCover(true);
+        const asset = result.assets[0];
+        const formData = new FormData();
+        formData.append("file", {
+          uri: Platform.OS === "ios" ? asset.uri.replace("file://", "") : asset.uri,
+          name: asset.fileName || `cover_${Date.now()}.jpg`,
+          type: "image/jpeg",
+        } as any);
+
+        const uploadRes = await uploadFile(formData);
+        if (uploadRes.success) {
+          if (isNewProject) {
+            setNewCoverUrl(uploadRes.url);
+          } else if (selProject) {
+            const updateRes = await updateProject(selProject._id, {
+              coverImageUrl: uploadRes.url,
+            });
+            if (updateRes.success) {
+              setSelProject(updateRes.project);
+              await refreshProjects();
+              Alert.alert("Success", "Cover image updated successfully!");
+            } else {
+              Alert.alert("Error", "Failed to save cover image to project.");
+            }
+          }
+        } else {
+          Alert.alert("Error", "Cover image upload failed.");
+        }
+      }
+    } catch (err: any) {
+      console.error("Cover upload error:", err);
+      Alert.alert("Error", err?.message || "Failed to upload cover.");
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  const handleCreateMilestone = async () => {
+    if (!newMilestoneTitle.trim() || !selProject) return;
+    setCreatingMilestone(true);
+    try {
+      const res = await createMilestone({
+        title: newMilestoneTitle.trim(),
+        description: newMilestoneDesc.trim(),
+        project: selProject._id,
+      });
+      if (res.success) {
+        setNewMilestoneTitle("");
+        setNewMilestoneDesc("");
+        await loadMilestones(selProject._id);
+      }
+    } catch (e) {
+      console.error("Failed to create milestone:", e);
+    } finally {
+      setCreatingMilestone(false);
+    }
+  };
+
+  const handleToggleMilestone = async (m: Milestone) => {
+    if (!selProject) return;
+    try {
+      const res = await updateMilestone(m._id, {
+        status: m.status === "active" ? "completed" : "active",
+      });
+      if (res.success) {
+        await loadMilestones(selProject._id);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteMilestone = async (mId: string) => {
+    if (!selProject) return;
+    try {
+      const res = await deleteMilestone(mId);
+      if (res.success) {
+        await loadMilestones(selProject._id);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   async function handleDelete(projectId: string) {
     Alert.alert("Delete Project", "Permanently delete this project and all its tasks?", [
@@ -302,12 +476,14 @@ export default function ProjectsScreen() {
           <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1 }}>Workspace</Text>
           <Text style={{ color: "#fff", fontSize: 17, fontWeight: "800", marginTop: 1 }}>{activeWorkspace.name}</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => setCreateVisible(true)}
-          style={{ backgroundColor: themeColor, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 4 }}
-        >
-          <Text style={{ color: "#0C101B", fontWeight: "800", fontSize: 14 }}>+ New Project</Text>
-        </TouchableOpacity>
+        {!isWorkspaceViewer && (
+          <TouchableOpacity
+            onPress={() => setCreateVisible(true)}
+            style={{ backgroundColor: themeColor, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 4 }}
+          >
+            <Text style={{ color: "#0C101B", fontWeight: "800", fontSize: 14 }}>+ New Project</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ── PROJECT LIST ── */}
@@ -325,15 +501,48 @@ export default function ProjectsScreen() {
           const color = project.color || themeColor;
           const isOwner = getProjectCreatorId(project) === user?._id;
 
+          const stats = projectStats[project._id] || { completed: 0, total: 0 };
+          const progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
           return (
             <View
               key={project._id}
-              style={{ backgroundColor: "#161922", borderRadius: 18, marginBottom: 14, borderWidth: 1.5, borderColor: isActive ? color : "#1E2130", overflow: "hidden" }}
+              style={{ backgroundColor: "#161922", borderRadius: 18, marginBottom: 14, borderWidth: 1.5, borderColor: isActive ? color : "#1E2130", overflow: "hidden", position: "relative" }}
             >
-              {/* color accent strip */}
-              <View style={{ height: 4, backgroundColor: color }} />
+              <View style={{ height: 50, position: "relative" }}>
+                {project.coverImageUrl ? (
+                  <Image source={{ uri: project.coverImageUrl }} style={{ width: "100%", height: 50 }} resizeMode="cover" />
+                ) : (
+                  <View style={{ width: "100%", height: 50, backgroundColor: color }} />
+                )}
+              </View>
 
-              <View style={{ padding: 16 }}>
+              {/* Overlapping Notion/Linear-style circular icon badge */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: 32,
+                  left: 16,
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "#161922",
+                  borderWidth: 1.5,
+                  borderColor: isActive ? color : "#1E2130",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 10,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 3,
+                  elevation: 5,
+                }}
+              >
+                <Ionicons name="briefcase" size={14} color={color} />
+              </View>
+
+              <View style={{ padding: 16, paddingTop: 20 }}>
                 {/* Project name + active badge */}
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <Text style={{ color: "#fff", fontSize: 17, fontWeight: "800", flex: 1, marginRight: 8 }}>{project.name}</Text>
@@ -352,6 +561,17 @@ export default function ProjectsScreen() {
                 {!!project.description && (
                   <Text style={{ color: "#6B7280", fontSize: 13, lineHeight: 18, marginBottom: 10 }}>{project.description}</Text>
                 )}
+
+                {/* Progress bar */}
+                <View style={{ marginBottom: 14 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "600" }}>PROGRESS ({stats.completed}/{stats.total})</Text>
+                    <Text style={{ color, fontSize: 11, fontWeight: "700" }}>{progress}%</Text>
+                  </View>
+                  <View style={{ height: 6, width: "100%", backgroundColor: "#10121A", borderRadius: 3, overflow: "hidden" }}>
+                    <View style={{ height: "100%", width: `${progress}%`, backgroundColor: color, borderRadius: 3 }} />
+                  </View>
+                </View>
 
                 {/* Member avatars row */}
                 <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
@@ -428,13 +648,38 @@ export default function ProjectsScreen() {
               </View>
 
               <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "600", marginBottom: 12 }}>ACCENT COLOR</Text>
-              <View style={{ flexDirection: "row", justifyContent: "space-around", marginBottom: 28 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-around", marginBottom: 20 }}>
                 {PROJECT_COLORS.map((c) => (
                   <TouchableOpacity key={c} onPress={() => setNewColor(c)} style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: c, alignItems: "center", justifyContent: "center", borderWidth: newColor === c ? 3 : 0, borderColor: "#fff", transform: [{ scale: newColor === c ? 1.15 : 1 }] }}>
                     {newColor === c && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "rgba(0,0,0,0.35)" }} />}
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "600", marginBottom: 8 }}>PROJECT BANNER (COVER IMAGE)</Text>
+              <TouchableOpacity
+                onPress={() => pickCoverImage(true)}
+                style={{
+                  backgroundColor: "#0F1117",
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#2A2D3E",
+                  padding: newCoverUrl ? 0 : 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 28,
+                  height: 90,
+                  overflow: "hidden",
+                }}
+              >
+                {newCoverUrl ? (
+                  <Image source={{ uri: newCoverUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                ) : (
+                  <Text style={{ color: "#9B9BAE", fontSize: 13, fontWeight: "600" }}>
+                    {uploadingCover ? "Uploading banner..." : "Select Banner Image"}
+                  </Text>
+                )}
+              </TouchableOpacity>
 
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity onPress={() => setCreateVisible(false)} style={{ flex: 1, backgroundColor: "#0F1117", borderRadius: 14, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: "#2A2D3E" }}>
@@ -448,7 +693,6 @@ export default function ProjectsScreen() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
-
       {/* ══════════════════════════════════════════════════════════
           MODAL 2 ── MANAGE PROJECT (Members + Settings)
       ══════════════════════════════════════════════════════════ */}
@@ -470,208 +714,394 @@ export default function ProjectsScreen() {
                 <Text style={{ color: "#6B7280", fontSize: 13, marginTop: 3 }}>Members & Settings</Text>
               </View>
 
+              {/* Settings Tab Toggles */}
+              <View style={{ flexDirection: "row", paddingHorizontal: 22, paddingTop: 14, gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setSettingsTab("members")}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: 20,
+                    backgroundColor: settingsTab === "members" ? (selProject?.color ?? themeColor) : "#1E2130"
+                  }}
+                >
+                  <Text style={{ color: settingsTab === "members" ? "#0F1117" : "#C9D1E0", fontSize: 12, fontWeight: "700" }}>Members</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setSettingsTab("milestones")}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: 20,
+                    backgroundColor: settingsTab === "milestones" ? (selProject?.color ?? themeColor) : "#1E2130"
+                  }}
+                >
+                  <Text style={{ color: settingsTab === "milestones" ? "#0F1117" : "#C9D1E0", fontSize: 12, fontWeight: "700" }}>Milestones</Text>
+                </TouchableOpacity>
+              </View>
+
               <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 22, paddingBottom: 12 }}>
 
-                {/* ── CURRENT MEMBERS ── */}
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
-                    Current Members
-                  </Text>
-                  <View style={{ backgroundColor: "#1E2130", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 }}>
-                    <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "700" }}>{selProject?.members?.length ?? 0} total</Text>
-                  </View>
-                </View>
-
-                <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", marginBottom: 24 }}>
-                  {(selProject?.members ?? []).length === 0 && (
-                    <View style={{ padding: 20, alignItems: "center" }}>
-                      <Text style={{ color: "#6B7280", fontSize: 13 }}>No members yet.</Text>
-                    </View>
-                  )}
-                  {(selProject?.members ?? []).map((m: any, idx: number) => {
-                    const uObj = typeof m.user === "object" ? m.user : null;
-                    const mId = getUserId(m.user);
-                    const isMe = mId === user?._id;
-                    const isCreator = mId === getProjectCreatorId(selProject);
-                    const canManage = isOwnerOfSelected && !isMe;
-                    const color = selProject?.color ?? themeColor;
-
-                    return (
-                      <View key={mId ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 14, borderBottomWidth: idx < (selProject?.members?.length ?? 0) - 1 ? 1 : 0, borderBottomColor: "#161922" }}>
-                        <TouchableOpacity
-                          onPress={() => uObj && (setProfileUser(uObj), setProfileVisible(true))}
-                          style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}
-                          activeOpacity={uObj ? 0.6 : 1}
-                        >
-                          {uObj ? <Avatar userObj={uObj} size={40} /> : (
-                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#1E2130", alignItems: "center", justifyContent: "center" }}>
-                              <Text style={{ color: "#6B7280" }}>?</Text>
-                            </View>
-                          )}
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>{uObj ? getFullName(uObj) : "Unknown"}</Text>
-                              {isCreator && <View style={{ backgroundColor: `${color}22`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color, fontSize: 9, fontWeight: "800" }}>OWNER</Text></View>}
-                              {isMe && <View style={{ backgroundColor: "#1E2130", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#6B7280", fontSize: 9, fontWeight: "800" }}>YOU</Text></View>}
-                            </View>
-                            <Text style={{ color: "#4A4A6A", fontSize: 11, marginTop: 1 }}>{uObj?.email ?? ""}</Text>
-                          </View>
-                          <RolePill role={m.role} accent={color} />
-                        </TouchableOpacity>
-
-                        {canManage && (
-                          <View style={{ flexDirection: "row", gap: 6, marginLeft: 8 }}>
-                            <TouchableOpacity
-                              onPress={() => handleRoleToggle(mId, m.role)}
-                              disabled={roleId === mId}
-                              style={{ backgroundColor: "#1E2130", borderWidth: 1, borderColor: "#2A2D3E", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
-                            >
-                              {roleId === mId
-                                ? <ActivityIndicator size="small" color="#9B9BAE" />
-                                : <Text style={{ color: "#9B9BAE", fontSize: 11, fontWeight: "700" }}>{m.role === "admin" ? "⬇ Demote" : "⬆ Promote"}</Text>}
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => handleRemove(mId)}
-                              disabled={removingId === mId}
-                              style={{ backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1, borderColor: "rgba(239,68,68,0.3)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
-                            >
-                              {removingId === mId
-                                ? <ActivityIndicator size="small" color="#ef4444" />
-                                : <Text style={{ color: "#ef4444", fontSize: 11, fontWeight: "700" }}>Remove</Text>}
-                            </TouchableOpacity>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-
-                {/* ── ADD MEMBER SECTION ── */}
-                <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 4 }}>Add Members</Text>
-                <Text style={{ color: "#6B7280", fontSize: 13, marginBottom: 14 }}>
-                  Search workspace members below. Type 2+ characters to search all users globally.
-                </Text>
-
-                {/* Search box */}
-                <View style={{ backgroundColor: "#0F1117", borderRadius: 14, borderWidth: 1, borderColor: "#2A2D3E", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, marginBottom: 18 }}>
-                  <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
-                  <TextInput
-                    style={{ flex: 1, color: "#fff", fontSize: 14, paddingVertical: 13 }}
-                    placeholder="Search by name or email..."
-                    placeholderTextColor="#3A3D4E"
-                    value={query}
-                    onChangeText={setQuery}
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                  />
-                  {searching && <ActivityIndicator size="small" color={themeColor} />}
-                  {query.length > 0 && !searching && (
-                    <TouchableOpacity onPress={() => { setQuery(""); setGlobalResults([]); }}>
-                      <Text style={{ color: "#6B7280", fontSize: 20, lineHeight: 22 }}>×</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* ── Workspace members list ── */}
-                <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
-                  From This Workspace
-                </Text>
-
-                <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", marginBottom: 20 }}>
-                  {availableWsMembers.length === 0 ? (
-                    <View style={{ padding: 20, alignItems: "center" }}>
-                      <Text style={{ color: "#6B7280", fontSize: 13, textAlign: "center" }}>
-                        {query.trim()
-                          ? "No workspace members match your search."
-                          : "All workspace members are already in this project."}
-                      </Text>
-                    </View>
-                  ) : availableWsMembers.map((wm: any, idx: number) => {
-                    const uObj = typeof wm.user === "object" ? wm.user : null;
-                    const wmId = getUserId(wm.user);
-                    const loading = addingId === wmId;
-                    const color = selProject?.color ?? themeColor;
-
-                    return (
-                      <View key={wmId ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 14, borderBottomWidth: idx < availableWsMembers.length - 1 ? 1 : 0, borderBottomColor: "#161922" }}>
-                        <TouchableOpacity onPress={() => uObj && (setProfileUser(uObj), setProfileVisible(true))} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }} activeOpacity={uObj ? 0.6 : 1}>
-                          {uObj ? <Avatar userObj={uObj} size={40} /> : (
-                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#1E2130", alignItems: "center", justifyContent: "center" }}>
-                              <Text style={{ color: "#6B7280" }}>?</Text>
-                            </View>
-                          )}
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{uObj ? getFullName(uObj) : "Unknown"}</Text>
-                            <Text style={{ color: "#4A4A6A", fontSize: 11, marginTop: 1 }}>{uObj?.email ?? ""}</Text>
-                          </View>
-                        </TouchableOpacity>
-
-                        {/* ✅ ADD BUTTON — clearly visible */}
-                        <TouchableOpacity
-                          onPress={() => handleAddWsMember(wmId)}
-                          disabled={loading}
-                          style={{ backgroundColor: color, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 10, minWidth: 64, alignItems: "center" }}
-                        >
-                          {loading
-                            ? <ActivityIndicator size="small" color="#0C101B" />
-                            : <Text style={{ color: "#0C101B", fontSize: 13, fontWeight: "800" }}>Add</Text>}
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                </View>
-
-                {/* ── Global / external users ── */}
-                {query.trim().length >= 2 && (
+                {settingsTab === "members" && (
                   <>
-                    <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
-                      Invite External User
-                    </Text>
-                    <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", marginBottom: 20 }}>
-                      {searching ? (
-                        <View style={{ padding: 24, alignItems: "center" }}>
-                          <ActivityIndicator color={themeColor} />
-                          <Text style={{ color: "#6B7280", fontSize: 12, marginTop: 8 }}>Searching...</Text>
-                        </View>
-                      ) : globalResults.length === 0 ? (
+                    {/* ── CURRENT MEMBERS ── */}
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
+                        Current Members
+                      </Text>
+                      <View style={{ backgroundColor: "#1E2130", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 }}>
+                        <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "700" }}>{selProject?.members?.length ?? 0} total</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", marginBottom: 24 }}>
+                      {(selProject?.members ?? []).length === 0 && (
                         <View style={{ padding: 20, alignItems: "center" }}>
-                          <Text style={{ color: "#6B7280", fontSize: 13, textAlign: "center" }}>No external users found for "{query}"</Text>
+                          <Text style={{ color: "#6B7280", fontSize: 13 }}>No members yet.</Text>
                         </View>
-                      ) : globalResults.map((u, idx) => {
-                        const loading = inviteId === u._id;
-                        const name = u.username ? `${u.username.firstname} ${u.username.lastname}` : "User";
+                      )}
+                      {(selProject?.members ?? []).map((m: any, idx: number) => {
+                        const uObj = typeof m.user === "object" ? m.user : null;
+                        const mId = getUserId(m.user);
+                        const isMe = mId === user?._id;
+                        const isCreator = mId === getProjectCreatorId(selProject);
+                        const canManage = isOwnerOfSelected && !isMe;
                         const color = selProject?.color ?? themeColor;
 
                         return (
-                          <View key={u._id ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 14, borderBottomWidth: idx < globalResults.length - 1 ? 1 : 0, borderBottomColor: "#161922" }}>
-                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#1E2130", alignItems: "center", justifyContent: "center", marginRight: 12, borderWidth: 1.5, borderColor: "#2A2D3E" }}>
-                              <Text style={{ color: "#9B9BAE", fontSize: 13, fontWeight: "700" }}>{name.slice(0, 2).toUpperCase()}</Text>
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{name}</Text>
-                              <Text style={{ color: "#4A4A6A", fontSize: 11, marginTop: 1 }}>{u.email}</Text>
-                            </View>
+                          <View key={mId ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 14, borderBottomWidth: idx < (selProject?.members?.length ?? 0) - 1 ? 1 : 0, borderBottomColor: "#161922" }}>
                             <TouchableOpacity
-                              onPress={() => handleInviteAndAdd(u)}
-                              disabled={loading}
-                              style={{ backgroundColor: "#1E2130", borderWidth: 1.5, borderColor: color, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 5 }}
+                              onPress={() => uObj && (setProfileUser(uObj), setProfileVisible(true))}
+                              style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}
+                              activeOpacity={uObj ? 0.6 : 1}
                             >
-                              {loading
-                                ? <ActivityIndicator size="small" color={color} />
-                                : <>
-                                  <Text style={{ fontSize: 12 }}>✉️</Text>
-                                  <Text style={{ color, fontSize: 12, fontWeight: "800" }}>Invite</Text>
-                                </>}
+                              {uObj ? <Avatar userObj={uObj} size={40} /> : (
+                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#1E2130", alignItems: "center", justifyContent: "center" }}>
+                                  <Text style={{ color: "#6B7280" }}>?</Text>
+                                </View>
+                              )}
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>{uObj ? getFullName(uObj) : "Unknown"}</Text>
+                                  {isCreator && <View style={{ backgroundColor: `${color}22`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color, fontSize: 9, fontWeight: "800" }}>OWNER</Text></View>}
+                                  {isMe && <View style={{ backgroundColor: "#1E2130", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#6B7280", fontSize: 9, fontWeight: "800" }}>YOU</Text></View>}
+                                </View>
+                                <Text style={{ color: "#4A4A6A", fontSize: 11, marginTop: 1 }}>{uObj?.email ?? ""}</Text>
+                              </View>
+                              <RolePill role={m.role} accent={color} />
                             </TouchableOpacity>
+
+                            {canManage && (
+                              <View style={{ flexDirection: "row", gap: 6, marginLeft: 8 }}>
+                                <TouchableOpacity
+                                  onPress={() => handleRoleToggle(mId, m.role)}
+                                  disabled={roleId === mId}
+                                  style={{ backgroundColor: "#1E2130", borderWidth: 1, borderColor: "#2A2D3E", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                                >
+                                  {roleId === mId
+                                    ? <ActivityIndicator size="small" color="#9B9BAE" />
+                                    : <Text style={{ color: "#9B9BAE", fontSize: 11, fontWeight: "700" }}>{m.role === "admin" ? "⬇ Demote" : "⬆ Promote"}</Text>}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => handleRemove(mId)}
+                                  disabled={removingId === mId}
+                                  style={{ backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1, borderColor: "rgba(239,68,68,0.3)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                                >
+                                  {removingId === mId
+                                    ? <ActivityIndicator size="small" color="#ef4444" />
+                                    : <Text style={{ color: "#ef4444", fontSize: 11, fontWeight: "700" }}>Remove</Text>}
+                                </TouchableOpacity>
+                              </View>
+                            )}
                           </View>
                         );
                       })}
                     </View>
+
+                    {!isViewer && (
+                      <>
+                        {/* ── ADD MEMBER SECTION ── */}
+                        <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 4 }}>Add Members</Text>
+                        <Text style={{ color: "#6B7280", fontSize: 13, marginBottom: 14 }}>
+                          Search workspace members below. Type 2+ characters to search all users globally.
+                        </Text>
+
+                        {/* Search box */}
+                        <View style={{ backgroundColor: "#0F1117", borderRadius: 14, borderWidth: 1, borderColor: "#2A2D3E", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, marginBottom: 18 }}>
+                          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+                          <TextInput
+                            style={{ flex: 1, color: "#fff", fontSize: 14, paddingVertical: 13 }}
+                            placeholder="Search by name or email..."
+                            placeholderTextColor="#3A3D4E"
+                            value={query}
+                            onChangeText={setQuery}
+                            autoCorrect={false}
+                            autoCapitalize="none"
+                          />
+                          {searching && <ActivityIndicator size="small" color={themeColor} />}
+                          {query.length > 0 && !searching && (
+                            <TouchableOpacity onPress={() => { setQuery(""); setGlobalResults([]); }}>
+                              <Text style={{ color: "#6B7280", fontSize: 20, lineHeight: 22 }}>×</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        {/* ── Workspace members list ── */}
+                        <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
+                          From This Workspace
+                        </Text>
+
+                        <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", marginBottom: 20 }}>
+                          {availableWsMembers.length === 0 ? (
+                            <View style={{ padding: 20, alignItems: "center" }}>
+                              <Text style={{ color: "#6B7280", fontSize: 13, textAlign: "center" }}>
+                                {query.trim()
+                                  ? "No workspace members match your search."
+                                  : "All workspace members are already in this project."}
+                              </Text>
+                            </View>
+                          ) : availableWsMembers.map((wm: any, idx: number) => {
+                            const uObj = typeof wm.user === "object" ? wm.user : null;
+                            const wmId = getUserId(wm.user);
+                            const loading = addingId === wmId;
+                            const color = selProject?.color ?? themeColor;
+
+                            return (
+                              <View key={wmId ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 14, borderBottomWidth: idx < availableWsMembers.length - 1 ? 1 : 0, borderBottomColor: "#161922" }}>
+                                <TouchableOpacity onPress={() => uObj && (setProfileUser(uObj), setProfileVisible(true))} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }} activeOpacity={uObj ? 0.6 : 1}>
+                                  {uObj ? <Avatar userObj={uObj} size={40} /> : (
+                                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#1E2130", alignItems: "center", justifyContent: "center" }}>
+                                      <Text style={{ color: "#6B7280" }}>?</Text>
+                                    </View>
+                                  )}
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{uObj ? getFullName(uObj) : "Unknown"}</Text>
+                                    <Text style={{ color: "#4A4A6A", fontSize: 11, marginTop: 1 }}>{uObj?.email ?? ""}</Text>
+                                  </View>
+                                </TouchableOpacity>
+
+                                {/* ✅ ADD BUTTON — clearly visible */}
+                                <TouchableOpacity
+                                  onPress={() => handleAddWsMember(wmId)}
+                                  disabled={loading}
+                                  style={{ backgroundColor: "#1E2130", borderWidth: 1.5, borderColor: color, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 5 }}
+                                >
+                                  {loading
+                                    ? <ActivityIndicator size="small" color={color} />
+                                    : <>
+                                      <Text style={{ fontSize: 12 }}>✉️</Text>
+                                      <Text style={{ color, fontSize: 12, fontWeight: "800" }}>Invite</Text>
+                                    </>}
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </>
+                    )}
                   </>
                 )}
 
+                {settingsTab === "milestones" && (
+                  <View style={{ gap: 20, marginBottom: 20 }}>
+                    {/* ── COVER IMAGE SECTION ── */}
+                    <View>
+                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 10 }}>Cover Image Banner</Text>
+                      <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", position: "relative" }}>
+                        {selProject?.coverImageUrl ? (
+                          <Image source={{ uri: selProject.coverImageUrl }} style={{ width: "100%", height: 110 }} resizeMode="cover" />
+                        ) : (
+                          <View style={{ width: "100%", height: 110, backgroundColor: "#161922", alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ color: "#4A4A6A", fontSize: 13 }}>No cover image banner set</Text>
+                          </View>
+                        )}
+                        {!isViewer && (
+                          <TouchableOpacity
+                            onPress={() => pickCoverImage(false)}
+                            disabled={uploadingCover}
+                            style={{
+                              position: "absolute",
+                              bottom: 10,
+                              right: 10,
+                              backgroundColor: "rgba(15,17,23,0.8)",
+                              borderWidth: 1,
+                              borderColor: "#2A2D3E",
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
+                              borderRadius: 8,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 6
+                            }}
+                          >
+                            {uploadingCover ? (
+                              <ActivityIndicator size="small" color={selProject?.color ?? themeColor} />
+                            ) : (
+                              <>
+                                <Text style={{ color: "#fff", fontSize: 11 }}>📷</Text>
+                                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                                  {selProject?.coverImageUrl ? "Change Cover" : "Upload Cover"}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* ── MILESTONES LIST SECTION ── */}
+                    <View>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                        <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>Milestones</Text>
+                        {loadingMilestones && <ActivityIndicator size="small" color={selProject?.color ?? themeColor} />}
+                      </View>
+
+                      {loadingMilestones ? (
+                        <View style={{ padding: 20, alignItems: "center" }}>
+                          <ActivityIndicator size="small" color={selProject?.color ?? themeColor} />
+                        </View>
+                      ) : milestones.length === 0 ? (
+                        <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", padding: 20, alignItems: "center" }}>
+                          <Text style={{ color: "#6B7280", fontSize: 13 }}>No milestones set for this project.</Text>
+                        </View>
+                      ) : (
+                        <View style={{ gap: 10 }}>
+                          {milestones.map((m) => (
+                            <View
+                              key={m._id}
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                backgroundColor: "#0F1117",
+                                borderRadius: 16,
+                                borderWidth: 1,
+                                borderColor: m.status === "completed" ? "rgba(194,241,147,0.15)" : "#1E2130",
+                                padding: 14,
+                                gap: 12
+                              }}
+                            >
+                              <TouchableOpacity
+                                onPress={() => !isViewer && handleToggleMilestone(m)}
+                                disabled={isViewer}
+                                style={{
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: 6,
+                                  borderWidth: 2,
+                                  borderColor: m.status === "completed" ? "#C2F193" : "#4A4A6A",
+                                  backgroundColor: m.status === "completed" ? "#C2F193" : "transparent",
+                                  alignItems: "center",
+                                  justifyContent: "center"
+                                }}
+                              >
+                                {m.status === "completed" && <Text style={{ color: "#0F1117", fontSize: 11, fontWeight: "bold" }}>✓</Text>}
+                              </TouchableOpacity>
+
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={{
+                                    color: m.status === "completed" ? "#6B7280" : "#fff",
+                                    fontSize: 14,
+                                    fontWeight: "700",
+                                    textDecorationLine: m.status === "completed" ? "line-through" : "none"
+                                  }}
+                                >
+                                  {m.title}
+                                </Text>
+                                {m.description ? (
+                                  <Text style={{ color: "#4A4A6A", fontSize: 12, marginTop: 2 }}>{m.description}</Text>
+                                ) : null}
+                              </View>
+
+                              {!isViewer && (
+                                <TouchableOpacity
+                                  onPress={() => handleDeleteMilestone(m._id)}
+                                  style={{ padding: 4 }}
+                                >
+                                  <Text style={{ color: "#ef4444", fontSize: 16 }}>×</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* ── CREATE MILESTONE SECTION ── */}
+                    {!isViewer && (
+                      <View style={{ marginTop: 6 }}>
+                        <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 12 }}>Create Milestone</Text>
+                        
+                        <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", padding: 16, gap: 12 }}>
+                          <TextInput
+                            style={{
+                              backgroundColor: "#161922",
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: "#2A2D3E",
+                              color: "#fff",
+                              fontSize: 14,
+                              paddingHorizontal: 14,
+                              paddingVertical: 12
+                            }}
+                            placeholder="Milestone Title..."
+                            placeholderTextColor="#3A3D4E"
+                            value={newMilestoneTitle}
+                            onChangeText={setNewMilestoneTitle}
+                          />
+
+                          <TextInput
+                            style={{
+                              backgroundColor: "#161922",
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: "#2A2D3E",
+                              color: "#fff",
+                              fontSize: 14,
+                              paddingHorizontal: 14,
+                              paddingVertical: 12,
+                              minHeight: 60,
+                              textAlignVertical: "top"
+                            }}
+                            placeholder="Milestone Description (optional)..."
+                            placeholderTextColor="#3A3D4E"
+                            value={newMilestoneDesc}
+                            onChangeText={setNewMilestoneDesc}
+                            multiline
+                          />
+
+                          <TouchableOpacity
+                            onPress={handleCreateMilestone}
+                            disabled={creatingMilestone || !newMilestoneTitle.trim()}
+                            style={{
+                              backgroundColor: newMilestoneTitle.trim() ? (selProject?.color ?? themeColor) : "#1E2130",
+                              paddingVertical: 14,
+                              borderRadius: 12,
+                              alignItems: "center"
+                            }}
+                          >
+                            {creatingMilestone ? (
+                              <ActivityIndicator size="small" color="#0F1117" />
+                            ) : (
+                              <Text
+                                style={{
+                                  color: newMilestoneTitle.trim() ? "#0F1117" : "#4A4A6A",
+                                  fontWeight: "800",
+                                  fontSize: 14
+                                }}
+                              >
+                                Create Milestone
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 {/* ── Delete project (owner only) ── */}
-                {isOwnerOfSelected && (
+                {isOwnerOfSelected && !isViewer && (
                   <>
                     <View style={{ height: 1, backgroundColor: "#1E2130", marginVertical: 6, marginBottom: 18 }} />
                     <TouchableOpacity

@@ -14,12 +14,22 @@ export interface IAttachment {
   createdAt: Date;
 }
 
+export interface ITimeLog {
+  _id?: mongoose.Types.ObjectId;
+  loggedBy: mongoose.Types.ObjectId;
+  hours: number;
+  description?: string;
+  date: Date;
+  createdAt?: Date;
+}
+
 export interface ITask extends Document {
   title: string;
   description: string;
   status: string;
   priority: string;
   dueDate: Date;
+  startDate?: Date;
   project: mongoose.Types.ObjectId;
   assignedTo?: mongoose.Types.ObjectId[];
   createdBy: mongoose.Types.ObjectId;
@@ -35,6 +45,21 @@ export interface ITask extends Document {
     nextRun?: Date;
   };
   sprint?: mongoose.Types.ObjectId;
+  milestone?: mongoose.Types.ObjectId;
+  position: number;
+  isArchived: boolean;
+  reminderSent?: boolean;
+
+  // Production-grade features
+  estimatedHours: number;
+  actualHours: number;
+  timeLogs: ITimeLog[];
+  isDeleted: boolean;
+  deletedAt?: Date;
+  customFields?: {
+    name: string;
+    value: any;
+  }[];
 }
 
 const taskSchema = new Schema<ITask>(
@@ -50,7 +75,6 @@ const taskSchema = new Schema<ITask>(
     },
     status: {
       type: String,
-      enum: ["todo", "in-progress", "completed"],
       default: "todo",
     },
     priority: {
@@ -60,6 +84,10 @@ const taskSchema = new Schema<ITask>(
     },
     dueDate: {
       type: Date,
+    },
+    startDate: {
+      type: Date,
+      default: Date.now,
     },
     project: {
       type: Schema.Types.ObjectId,
@@ -117,6 +145,56 @@ const taskSchema = new Schema<ITask>(
     sprint: {
       type: Schema.Types.ObjectId,
       ref: "Sprint",
+    },
+    milestone: {
+      type: Schema.Types.ObjectId,
+      ref: "Milestone",
+    },
+    position: {
+      type: Number,
+      default: 0,
+    },
+    isArchived: {
+      type: Boolean,
+      default: false,
+    },
+    reminderSent: {
+      type: Boolean,
+      default: false,
+    },
+    estimatedHours: {
+      type: Number,
+      default: 0,
+    },
+    actualHours: {
+      type: Number,
+      default: 0,
+    },
+    timeLogs: [
+      {
+        loggedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        hours: { type: Number, required: true },
+        description: { type: String, trim: true },
+        date: { type: Date, default: Date.now },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+    },
+    customFields: {
+      type: [
+        {
+          name: { type: String, required: true },
+          value: { type: Schema.Types.Mixed, default: "" }
+        }
+      ],
+      default: []
     },
   },
   {

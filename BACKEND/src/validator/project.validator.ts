@@ -21,6 +21,10 @@ export const createProjectSchema = z.object({
     .string()
     .optional(),
 
+  coverImageUrl: z
+    .string()
+    .optional(),
+
 });
 
 export const updateProjectSchema = z.object({
@@ -38,6 +42,10 @@ export const updateProjectSchema = z.object({
     "COMPLETED",
     "ARCHIVED",
   ]).optional(),
+
+  coverImageUrl: z
+    .string()
+    .optional(),
 
 });
 

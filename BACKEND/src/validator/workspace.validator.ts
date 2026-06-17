@@ -35,4 +35,8 @@ export const updateWorkspaceSchema = z.object({
     .string()
     .optional(),
 
+  logoUrl: z
+    .string()
+    .optional(),
+
 });

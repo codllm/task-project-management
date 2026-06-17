@@ -3,6 +3,7 @@ import Workspace from "../model/workspace.model";
 import Project from "../model/project.model";
 import mongoose from "mongoose";
 import { createNotification } from "./notification.service";
+import { seedDemoWorkspacesForUser } from "./demo.service";
 
 interface CreateWorkspacePayload {
   name: string;
@@ -59,11 +60,22 @@ export const getUserWorkspaces = async (
   userId: string
 ) => {
 
-  const workspaces = await Workspace.find({
+  let workspaces = await Workspace.find({
     "members.user": userId,
   })
     .populate("owner")
     .populate("members.user");
+
+  if (workspaces.length === 0) {
+    // Automatically seed two dummy workspaces with projects/tasks for first-time or empty users!
+    await seedDemoWorkspacesForUser(userId);
+    // Refetch the newly created demo workspaces
+    workspaces = await Workspace.find({
+      "members.user": userId,
+    })
+      .populate("owner")
+      .populate("members.user");
+  }
 
   return workspaces;
 };
@@ -73,6 +85,7 @@ interface UpdateWorkspacePayload {
   workspaceId: string;
   name?: string;
   description?: string;
+  logoUrl?: string;
 }
 
 
@@ -82,6 +95,7 @@ export const updateWorkspace = async ({
   workspaceId,
   name,
   description,
+  logoUrl,
 }: UpdateWorkspacePayload) => {
 
   const workspace = await Workspace.findById(
@@ -98,6 +112,10 @@ export const updateWorkspace = async ({
 
   if (description) {
     workspace.description = description;
+  }
+
+  if (logoUrl !== undefined) {
+    workspace.logoUrl = logoUrl;
   }
 
   await workspace.save();

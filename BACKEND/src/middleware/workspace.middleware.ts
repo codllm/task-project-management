@@ -77,3 +77,83 @@ export const isWorkspaceAdmin = async (
 
   }
 };
+
+export const blockViewers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const userId = user._id.toString();
+    let { workspaceId, projectId, taskId, commentId } = req.params;
+
+    // Fallback to request body for creation routes
+    if (!projectId && req.body.project) {
+      projectId = req.body.project;
+    }
+    if (!workspaceId && req.body.workspace) {
+      workspaceId = req.body.workspace;
+    }
+
+    if (commentId) {
+      const Comment = require("../model/comment.model").default;
+      const comment = await Comment.findById(commentId).populate("task");
+      if (comment && comment.task) {
+        taskId = (comment.task as any)._id.toString();
+      }
+    }
+
+    if (taskId) {
+      const Task = require("../model/task.model").default;
+      const task = await Task.findById(taskId);
+      if (task) {
+        projectId = task.project.toString();
+      }
+    }
+
+    if (projectId) {
+      const Project = require("../model/project.model").default;
+      const project = await Project.findById(projectId);
+      if (project) {
+        const projectMember = project.members.find(
+          (m: any) => m.user.toString() === userId
+        );
+        if (projectMember && projectMember.role === "viewer") {
+          return res.status(403).json({
+            success: false,
+            message: "Action forbidden: View-only role",
+          });
+        }
+        workspaceId = project.workspace.toString();
+      }
+    }
+
+    if (workspaceId) {
+      const Workspace = require("../model/workspace.model").default;
+      const workspace = await Workspace.findById(workspaceId);
+      if (workspace) {
+        const workspaceMember = workspace.members.find(
+          (m: any) => m.user.toString() === userId
+        );
+        if (workspaceMember && workspaceMember.role === "viewer") {
+          return res.status(403).json({
+            success: false,
+            message: "Action forbidden: View-only role in workspace",
+          });
+        }
+      }
+    }
+
+    next();
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to check viewer permissions",
+    });
+  }
+};

@@ -12,10 +12,13 @@ import {
   Platform,
   Dimensions,
   StatusBar,
+  Switch,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import { useApp } from "../../context/AppContext";
-import { updateProfileApi } from "../../api/user.api";
+import { updateProfileApi, updatePreferencesApi, uploadAvatarApi } from "../../api/user.api";
 
 const GENDERS = ["male", "female", "other"];
 
@@ -26,26 +29,10 @@ const THEME_COLORS = [
   { name: "Orange", color: "#FED7AA" },
 ];
 
-// ─── Design tokens ───────────────────────────────────────────────────────────
-const C = {
-  bg: "#15171C",
-  card: "#15171C",
-  input: "#1C1E24",
-  border: "#232630",
-  borderSubtle: "#1E2028",
-  textPrimary: "#F0F2F8",
-  textSecondary: "#D8DCE8",
-  textMuted: "#5E6A85",
-  textLabel: "#7A86A0",
-  danger: "#E54848",
-  dangerBg: "rgba(229,72,72,0.08)",
-  dangerBorder: "rgba(229,72,72,0.2)",
-};
-
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 export default function ProfileScreen() {
-  const { user, setUser, logout, themeColor, setThemeColor } = useApp();
+  const { user, setUser, logout, themeColor, setThemeColor, isDarkMode, setIsDarkMode, C } = useApp();
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [firstname, setFirstname] = useState(user?.username?.firstname || "");
@@ -54,6 +41,61 @@ export default function ProfileScreen() {
   const [phone, setPhone] = useState(user?.phone || "");
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const handlePickAvatar = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "We need permission to access your photos to set an avatar.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedImg = result.assets[0];
+        await handleUploadImage(selectedImg.uri);
+      }
+    } catch (err) {
+      console.error("Image picking error:", err);
+      Alert.alert("Error", "Could not pick image.");
+    }
+  };
+
+  const handleUploadImage = async (uri: string) => {
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      const filename = uri.split("/").pop() || "avatar.jpg";
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+      formData.append("avatar", {
+        uri,
+        name: filename,
+        type,
+      } as any);
+
+      const res = await uploadAvatarApi(formData);
+      if (res.success) {
+        Alert.alert("Success", "Avatar updated successfully!");
+        await setUser(res.user);
+      } else {
+        Alert.alert("Error", "Failed to upload avatar.");
+      }
+    } catch (err: any) {
+      console.error("Avatar upload error:", err);
+      Alert.alert("Error", err?.response?.data?.message || "An error occurred while uploading avatar.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleOpenEdit = () => {
     setFirstname(user?.username?.firstname || "");
@@ -96,6 +138,25 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const handleTogglePreference = async (key: "comments" | "assignments" | "mentions" | "reminders", val: boolean) => {
+    try {
+      const currentPrefs = user?.notificationPreferences || {
+        comments: true,
+        assignments: true,
+        mentions: true,
+        reminders: true,
+      };
+      const newPrefs = { ...currentPrefs, [key]: val };
+      const res = await updatePreferencesApi(newPrefs);
+      if (res.success) {
+        setUser({ ...user, notificationPreferences: res.user.notificationPreferences });
+      }
+    } catch (err: any) {
+      console.error("Failed to update preferences:", err);
+      Alert.alert("Error", "Failed to save notification preferences.");
+    }
+  };
+
   const getInitials = () => {
     if (!user?.username) return "U";
     return `${user.username.firstname[0]}${user.username.lastname[0]}`.toUpperCase();
@@ -123,7 +184,10 @@ export default function ProfileScreen() {
             marginBottom: 8,
           }}
         >
-          <View
+          <TouchableOpacity
+            onPress={handlePickAvatar}
+            disabled={uploadingAvatar}
+            activeOpacity={0.7}
             style={{
               width: 72,
               height: 72,
@@ -132,12 +196,24 @@ export default function ProfileScreen() {
               alignItems: "center",
               justifyContent: "center",
               marginBottom: 12,
+              overflow: "hidden",
+              borderWidth: 1.5,
+              borderColor: C.border,
             }}
           >
-            <Text style={{ color: "#0C1208", fontSize: 26, fontWeight: "500" }}>
-              {getInitials()}
-            </Text>
-          </View>
+            {uploadingAvatar ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : user?.avatarUrl ? (
+              <Image
+                source={{ uri: user.avatarUrl }}
+                style={{ width: "100%", height: "100%" }}
+              />
+            ) : (
+              <Text style={{ color: "#0C1208", fontSize: 26, fontWeight: "500" }}>
+                {getInitials()}
+              </Text>
+            )}
+          </TouchableOpacity>
 
           <Text
             style={{
@@ -196,6 +272,21 @@ export default function ProfileScreen() {
             marginBottom: 8,
           }}
         >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <View>
+              <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "600" }}>Dark Mode</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Toggle application styling mode</Text>
+            </View>
+            <Switch
+              value={isDarkMode}
+              onValueChange={setIsDarkMode}
+              trackColor={{ false: "#DEE2E6", true: themeColor }}
+              thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
+            />
+          </View>
+
+          <View style={{ height: 0.5, backgroundColor: C.border, marginBottom: 12 }} />
+
           <Text style={{ color: C.textMuted, fontSize: 12 }}>
             Choose a global accent color
           </Text>
@@ -238,6 +329,78 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               );
             })}
+          </View>
+        </View>
+
+        {/* ── Section: Notification Preferences ── */}
+        <SectionLabel label="Notification Preferences" />
+        <View
+          style={{
+            backgroundColor: C.card,
+            borderRadius: 16,
+            borderWidth: 0.5,
+            borderColor: C.border,
+            padding: 14,
+            marginBottom: 8,
+            gap: 16,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "600" }}>Comments</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Notify when a task has new comments</Text>
+            </View>
+            <Switch
+              value={user?.notificationPreferences?.comments ?? true}
+              onValueChange={(val) => handleTogglePreference("comments", val)}
+              trackColor={{ false: "#232630", true: themeColor }}
+              thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
+            />
+          </View>
+
+          <View style={{ height: 0.5, backgroundColor: C.border }} />
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "600" }}>Assignments</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Notify when you are assigned to a task</Text>
+            </View>
+            <Switch
+              value={user?.notificationPreferences?.assignments ?? true}
+              onValueChange={(val) => handleTogglePreference("assignments", val)}
+              trackColor={{ false: "#232630", true: themeColor }}
+              thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
+            />
+          </View>
+
+          <View style={{ height: 0.5, backgroundColor: C.border }} />
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "600" }}>Mentions</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Notify when someone mentions you using @</Text>
+            </View>
+            <Switch
+              value={user?.notificationPreferences?.mentions ?? true}
+              onValueChange={(val) => handleTogglePreference("mentions", val)}
+              trackColor={{ false: "#232630", true: themeColor }}
+              thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
+            />
+          </View>
+
+          <View style={{ height: 0.5, backgroundColor: C.border }} />
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "600" }}>Reminders & Deadlines</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Notify when deadlines are approaching</Text>
+            </View>
+            <Switch
+              value={user?.notificationPreferences?.reminders ?? true}
+              onValueChange={(val) => handleTogglePreference("reminders", val)}
+              trackColor={{ false: "#232630", true: themeColor }}
+              thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
+            />
           </View>
         </View>
 
@@ -481,10 +644,11 @@ export default function ProfileScreen() {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SectionLabel({ label }: { label: string }) {
+  const { C } = useApp();
   return (
     <Text
       style={{
-        color: "#5E6A85",
+        color: C.textMuted,
         fontSize: 11,
         fontWeight: "500",
         textTransform: "uppercase",
@@ -509,6 +673,7 @@ function DetailRow({
   capitalize?: boolean;
   last?: boolean;
 }) {
+  const { C } = useApp();
   return (
     <View
       style={{
@@ -518,13 +683,13 @@ function DetailRow({
         paddingHorizontal: 16,
         paddingVertical: 13,
         borderBottomWidth: last ? 0 : 0.5,
-        borderBottomColor: "#1A2030",
+        borderBottomColor: C.border,
       }}
     >
-      <Text style={{ color: "#5E6A85", fontSize: 13 }}>{label}</Text>
+      <Text style={{ color: C.textMuted, fontSize: 13 }}>{label}</Text>
       <Text
         style={{
-          color: "#D8DCE8",
+          color: C.textSecondary,
           fontSize: 13,
           fontWeight: "500",
           textTransform: capitalize ? "capitalize" : "none",
@@ -537,10 +702,11 @@ function DetailRow({
 }
 
 function FieldLabel({ text }: { text: string }) {
+  const { C } = useApp();
   return (
     <Text
       style={{
-        color: "#7A86A0",
+        color: C.textLabel || C.textMuted,
         fontSize: 11,
         fontWeight: "500",
         marginBottom: 5,
@@ -562,21 +728,22 @@ function FieldInput({
   placeholder?: string;
   keyboardType?: any;
 }) {
+  const { C } = useApp();
   return (
     <TextInput
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
-      placeholderTextColor="#3A4460"
+      placeholderTextColor={C.textMuted}
       keyboardType={keyboardType}
       style={{
-        backgroundColor: "#0E1422",
+        backgroundColor: C.input,
         borderWidth: 0.5,
-        borderColor: "#1E2438",
+        borderColor: C.inputBorder || C.border,
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 11,
-        color: "#D8DCE8",
+        color: C.textPrimary,
         fontSize: 14,
       }}
     />

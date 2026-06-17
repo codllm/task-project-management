@@ -1,6 +1,7 @@
 import http from "http";
 import app from "./app";
 import { initSocket } from "./services/socket";
+import { startScheduler } from "./services/scheduler";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -10,7 +11,9 @@ const server = http.createServer(app);
 // Initialize Socket.io
 initSocket(server);
 
-connectDB();
+connectDB().then(() => {
+  startScheduler();
+});
 
 const PORT = 5137;
 

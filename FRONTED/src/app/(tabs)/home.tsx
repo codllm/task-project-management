@@ -9,18 +9,25 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
+import { getPinnedItemsApi } from "../../api/user.api";
 import {
   addMemberToWorkspace,
   removeMemberFromWorkspace,
   changeMemberRole,
   leaveWorkspace,
   deleteWorkspace,
+  updateWorkspace,
 } from "../../api/workspace.api";
 import { getProjectTasks, Task } from "../../api/task.api";
-import { searchUsers, SearchUserResult } from "../../api/search.api";
+import { searchUsers, SearchUserResult, globalSearch } from "../../api/search.api";
+import { getWorkspaceActivities } from "../../api/activity.api";
+import { getWorkspaceAnalytics } from "../../api/project.api";
+import { uploadFile } from "../../api/upload.api";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -28,21 +35,44 @@ export default function HomeScreen() {
   const router = useRouter();
   const {
     user,
+    setUser,
+    token,
     workspaces,
     activeWorkspace,
     selectWorkspace,
     refreshWorkspaces,
     projects,
     themeColor,
+    selectProject,
+    isDarkMode,
+    C,
   } = useApp();
 
+  const [dashboardMode, setDashboardMode] = useState<"workspace" | "personal">("workspace");
   const [stats, setStats] = useState({ total: 0, completed: 0, inProgress: 0 });
   const [loadingStats, setLoadingStats] = useState(false);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  // Pinned items states
+  const [pinnedProjects, setPinnedProjects] = useState<any[]>([]);
+  const [pinnedTasks, setPinnedTasks] = useState<any[]>([]);
+  const [loadingPinned, setLoadingPinned] = useState(false);
+
+  // Activity Log states
+  const [activities, setActivities] = useState<any[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
 
   // Modal / Dropdown states
   const [workspaceMenuVisible, setWorkspaceMenuVisible] = useState(false);
   const [manageModalVisible, setManageModalVisible] = useState(false);
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<"stats" | "members">("stats");
+
+  // Global Search states
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [globalResults, setGlobalResults] = useState<any>(null);
+  const [searchingGlobal, setSearchingGlobal] = useState(false);
 
   // Invite states
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,35 +131,192 @@ export default function HomeScreen() {
 
   // Fetch and aggregate stats
   useEffect(() => {
-    if (activeWorkspace && projects.length > 0) {
-      loadStats();
+    if (activeWorkspace) {
+      loadWorkspaceAnalytics();
     } else {
+      setAnalytics(null);
       setStats({ total: 0, completed: 0, inProgress: 0 });
     }
   }, [activeWorkspace, projects]);
 
-  const loadStats = async () => {
+  useEffect(() => {
+    if (activeWorkspace) {
+      loadActivities();
+    } else {
+      setActivities([]);
+    }
+  }, [activeWorkspace]);
+
+  useEffect(() => {
+    if (user) {
+      loadPinnedItems();
+    }
+  }, [activeWorkspace, projects, user]);
+
+  // Global search hooks
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (globalQuery.trim().length >= 2) {
+        performGlobalSearch();
+      } else {
+        setGlobalResults(null);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounce);
+  }, [globalQuery]);
+
+  const performGlobalSearch = async () => {
+    setSearchingGlobal(true);
+    try {
+      const res = await globalSearch(globalQuery);
+      if (res.success) {
+        setGlobalResults(res.results);
+      }
+    } catch (err) {
+      console.error("Global search error:", err);
+    } finally {
+      setSearchingGlobal(false);
+    }
+  };
+
+  const handleSelectWorkspaceFromSearch = async (ws: any) => {
+    setSearchModalVisible(false);
+    setGlobalQuery("");
+    setGlobalResults(null);
+    await selectWorkspace(ws);
+  };
+
+  const handleSelectProjectFromSearch = (proj: any) => {
+    setSearchModalVisible(false);
+    setGlobalQuery("");
+    setGlobalResults(null);
+    selectProject(proj);
+    router.push("/(tabs)/tasks");
+  };
+
+  const handleSelectTaskFromSearch = async (task: any) => {
+    setSearchModalVisible(false);
+    setGlobalQuery("");
+    setGlobalResults(null);
+    const proj = projects.find(p => p._id === (typeof task.project === "object" ? task.project._id : task.project));
+    if (proj) {
+      selectProject(proj);
+      router.push("/(tabs)/tasks");
+    }
+  };
+
+  const loadActivities = async () => {
+    if (!activeWorkspace) return;
+    setLoadingActivities(true);
+    try {
+      const res = await getWorkspaceActivities(activeWorkspace._id);
+      if (res.success) {
+        setActivities(res.activities);
+      }
+    } catch (err) {
+      console.error("Error loading activities:", err);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
+  const getActivityIcon = (action: string): any => {
+    switch (action) {
+      case "task_created":
+        return "add-circle-outline";
+      case "task_updated":
+        return "create-outline";
+      case "task_status_changed":
+        return "swap-horizontal-outline";
+      case "task_deleted":
+        return "trash-outline";
+      case "comment_added":
+        return "chatbubble-ellipses-outline";
+      default:
+        return "git-commit-outline";
+    }
+  };
+
+  const loadWorkspaceAnalytics = async () => {
+    if (!activeWorkspace) return;
     setLoadingStats(true);
     try {
-      let totalTasks: Task[] = [];
-      const fetchPromises = projects.map((p) => getProjectTasks(p._id));
-      const results = await Promise.all(fetchPromises);
-
-      results.forEach((res) => {
-        if (res.success && res.tasks) {
-          totalTasks = [...totalTasks, ...res.tasks];
-        }
-      });
-
-      const total = totalTasks.length;
-      const completed = totalTasks.filter((t) => t.status === "completed").length;
-      const inProgress = totalTasks.filter((t) => t.status === "in-progress").length;
-
-      setStats({ total, completed, inProgress });
+      const res = await getWorkspaceAnalytics(activeWorkspace._id);
+      if (res.success) {
+        setAnalytics(res.analytics);
+        setStats({
+          total: res.analytics.summary.total,
+          completed: res.analytics.summary.completed,
+          inProgress: res.analytics.summary.inProgress,
+        });
+      }
     } catch (err) {
-      console.error("Error loading home stats:", err);
+      console.error("Error loading workspace analytics:", err);
     } finally {
       setLoadingStats(false);
+    }
+  };
+
+  const loadPinnedItems = async () => {
+    setLoadingPinned(true);
+    try {
+      const res = await getPinnedItemsApi();
+      if (res.success) {
+        setPinnedProjects(res.pinnedProjects || []);
+        setPinnedTasks(res.pinnedTasks || []);
+      }
+    } catch (err) {
+      console.error("Error loading pinned items:", err);
+    } finally {
+      setLoadingPinned(false);
+    }
+  };
+
+  const handleUploadLogo = async () => {
+    if (!activeWorkspace) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission denied", "Media library access is required.");
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        setUploadingLogo(true);
+        const asset = result.assets[0];
+        const formData = new FormData();
+        formData.append("file", {
+          uri: Platform.OS === "ios" ? asset.uri.replace("file://", "") : asset.uri,
+          name: asset.fileName || `logo_${Date.now()}.jpg`,
+          type: "image/jpeg",
+        } as any);
+
+        const uploadRes = await uploadFile(formData);
+        if (uploadRes.success) {
+          const updateRes = await updateWorkspace(activeWorkspace._id, {
+            logoUrl: uploadRes.url,
+          });
+          if (updateRes.success) {
+            Alert.alert("Success", "Logo updated successfully!");
+            await refreshWorkspaces();
+          } else {
+            Alert.alert("Error", "Failed to save logo to workspace.");
+          }
+        } else {
+          Alert.alert("Error", "Logo upload failed.");
+        }
+      }
+    } catch (err: any) {
+      console.error("Logo upload error:", err);
+      Alert.alert("Error", err?.message || "Failed to upload logo.");
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -437,27 +624,6 @@ export default function HomeScreen() {
     );
   }
 
-  const C = {
-    bg: "#15171C",
-    card: "#1C1F26",
-    cardBorder: "#2A2E38",
-    divider: "#232730",
-    input: "#20242C",
-    inputBorder: "#2E333D",
-    textPrimary: "#FFFFFF",
-    textSecondary: "#9DA3AE",
-    textMuted: "#6B7280",
-    accent: "#6FC3D6", // replaces themeColor as the default if you want a fixed accent;
-    // NOTE: this file still uses `themeColor` from context everywhere it was
-    // used originally — C.accent is only a fallback/reference and unused
-    // below unless you choose to swap it in.
-    onAccent: "#0D2A30",
-    danger: "#E2847A",
-    dangerBg: "rgba(216,99,74,0.12)",
-    dangerBorder: "rgba(216,99,74,0.25)",
-    tagBg: "#232730",
-    tagText: "#C8CDD6",
-  };
 return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: C.bg }}>
       {/* Upper header with custom workspace dropdown */}
@@ -467,20 +633,37 @@ return (
           className="flex-row items-center rounded-xl px-4 py-2.5 border"
           style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
         >
-          <Ionicons name="briefcase-outline" size={16} color={themeColor} style={{ marginRight: 8 }} />
+          {activeWorkspace?.logoUrl ? (
+            <Image 
+              source={{ uri: activeWorkspace.logoUrl }} 
+              style={{ width: 20, height: 20, borderRadius: 4, marginRight: 8 }} 
+            />
+          ) : (
+            <Ionicons name="briefcase-outline" size={16} color={themeColor} style={{ marginRight: 8 }} />
+          )}
           <Text className="font-semibold text-base mr-2" style={{ color: C.textPrimary }}>
             {activeWorkspace?.name || "Select Workspace"}
           </Text>
           <Ionicons name="chevron-down" size={14} color={themeColor} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setManageModalVisible(true)}
-          className="p-2.5 rounded-xl border"
-          style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
-        >
-          <Ionicons name="settings-outline" size={18} color={C.textSecondary} />
-        </TouchableOpacity>
+        <View className="flex-row gap-2">
+          <TouchableOpacity
+            onPress={() => setSearchModalVisible(true)}
+            className="p-2.5 rounded-xl border"
+            style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+          >
+            <Ionicons name="search-outline" size={18} color={C.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setManageModalVisible(true)}
+            className="p-2.5 rounded-xl border"
+            style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+          >
+            <Ionicons name="settings-outline" size={18} color={C.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView className="flex-1 px-5 pt-4" style={{ backgroundColor: C.bg }}>
@@ -527,98 +710,348 @@ return (
         {activeTab === "stats" ? (
           <>
             {/* Workspace Header Info */}
-            <View className="mb-6 rounded-2xl p-5 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-              <Text className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: themeColor }}>
-                Workspace Active
-              </Text>
-              <Text className="text-2xl font-bold" style={{ color: C.textPrimary }}>{activeWorkspace?.name}</Text>
-              {activeWorkspace?.description ? (
-                <Text className="text-sm mt-2 leading-5" style={{ color: C.textSecondary }}>
-                  {activeWorkspace.description}
-                </Text>
+            <View className="mb-6 rounded-2xl p-5 border flex-row items-center" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+              {activeWorkspace?.logoUrl ? (
+                <Image 
+                  source={{ uri: activeWorkspace.logoUrl }} 
+                  style={{ width: 48, height: 48, borderRadius: 12, marginRight: 16 }} 
+                />
               ) : null}
+              <View className="flex-1">
+                <Text className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: themeColor }}>
+                  Workspace Active
+                </Text>
+                <Text className="text-2xl font-bold" style={{ color: C.textPrimary }}>{activeWorkspace?.name}</Text>
+                {activeWorkspace?.description ? (
+                  <Text className="text-sm mt-1 leading-5" style={{ color: C.textSecondary }}>
+                    {activeWorkspace.description}
+                  </Text>
+                ) : null}
+              </View>
             </View>
 
-            {/* Dynamic Dashboard Stats */}
-            <Text className="text-lg font-bold mb-4" style={{ color: C.textPrimary }}>Workspace Stats</Text>
-            {loadingStats ? (
-             <ActivityIndicator
-             size="large"
-             color={themeColor}
-             style={{ transform: [{ scale: 2 }] }}
-             className="my-8"
-           />
-            ) : (
-              <View className="flex-row gap-3 mb-6">
-                {/* Left Column - Tall Vertical Card, muted teal tint */}
-                <View
-                  className="flex-1 rounded-3xl p-5 justify-between min-h-[220px] border"
-                  style={{ backgroundColor: "#1E2A2D", borderColor: "#2C3B3E" }}
-                >
-                  <View
-                    className="w-9 h-9 rounded-xl items-center justify-center"
-                    style={{ backgroundColor: themeColor }}
-                  >
-                    <Ionicons name="clipboard-outline" size={50} color={C.onAccent} />
+            {/* Pinned Projects & Tasks Section */}
+            {(pinnedProjects.length > 0 || pinnedTasks.length > 0) && (
+              <View className="mb-6">
+                <Text className="text-lg font-bold mb-4" style={{ color: C.textPrimary }}>📌 Pinned Items</Text>
+                
+                {/* Pinned Projects */}
+                {pinnedProjects.length > 0 && (
+                  <View className="mb-4">
+                    <Text className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: C.textSecondary }}>Projects</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                      {pinnedProjects.map((proj: any) => (
+                        <TouchableOpacity
+                          key={proj._id}
+                          onPress={() => handleSelectProjectFromSearch(proj)}
+                          className="mr-3 p-4 rounded-2xl border"
+                          style={{
+                            backgroundColor: C.card,
+                            borderColor: proj.color || C.cardBorder,
+                            borderLeftWidth: 5,
+                            minWidth: 150
+                          }}
+                        >
+                          <Text className="font-bold text-sm" style={{ color: C.textPrimary }} numberOfLines={1}>{proj.name}</Text>
+                          <Text className="text-xs mt-1" style={{ color: C.textSecondary }}>Active Workspace</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
                   </View>
-                  <View>
-                    <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#7FA8AF" }}>
-                      Total Tasks
-                    </Text>
-                    <Text className="text-4xl font-extrabold mt-1" style={{ color: C.textPrimary }}>{stats.total}</Text>
-                  </View>
-                </View>
+                )}
 
-                {/* Right Column - Stacked Small Cards, each its own muted tint */}
-                <View className="flex-[1.2] gap-3">
+                {/* Pinned Tasks */}
+                {pinnedTasks.length > 0 && (
+                  <View>
+                    <Text className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: C.textSecondary }}>Tasks</Text>
+                    {pinnedTasks.map((task: any) => (
+                      <TouchableOpacity
+                        key={task._id}
+                        onPress={() => handleSelectTaskFromSearch(task)}
+                        className="mb-2 p-4 rounded-2xl border flex-row items-center justify-between"
+                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                      >
+                        <View className="flex-1 mr-3">
+                          <View className="flex-row items-center mb-1">
+                            <View className="w-2 h-2 rounded-full mr-2" style={{
+                              backgroundColor: task.priority === "high" ? "#E24B4A" : task.priority === "medium" ? "#EF9F27" : "#5DCAA5"
+                            }} />
+                            <Text className="font-semibold text-sm" style={{ color: C.textPrimary }} numberOfLines={1}>{task.title}</Text>
+                          </View>
+                          <Text className="text-xs" style={{ color: C.textSecondary }}>
+                            {task.status.toUpperCase()} • {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}
+                          </Text>
+                        </View>
+                        <Ionicons name="pin" size={16} color={themeColor} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Dynamic Dashboard Stats */}
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-lg font-bold" style={{ color: C.textPrimary }}>
+                {dashboardMode === "workspace" ? "Workspace Stats" : "Personal Productivity"}
+              </Text>
+            </View>
+
+            {/* Dashboard Mode Selector */}
+            <View className="flex-row mb-5 p-1 rounded-2xl border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+              <TouchableOpacity
+                onPress={() => setDashboardMode("workspace")}
+                className="flex-1 py-2.5 items-center justify-center rounded-xl"
+                style={{ backgroundColor: dashboardMode === "workspace" ? themeColor : "transparent" }}
+              >
+                <Text
+                  className="font-bold text-xs uppercase tracking-wider"
+                  style={{ color: dashboardMode === "workspace" ? "#0C101B" : C.textSecondary }}
+                >
+                  Workspace View
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setDashboardMode("personal")}
+                className="flex-1 py-2.5 items-center justify-center rounded-xl"
+                style={{ backgroundColor: dashboardMode === "personal" ? themeColor : "transparent" }}
+              >
+                <Text
+                  className="font-bold text-xs uppercase tracking-wider"
+                  style={{ color: dashboardMode === "personal" ? "#0C101B" : C.textSecondary }}
+                >
+                  Personal Stats
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingStats ? (
+              <ActivityIndicator
+                size="large"
+                color={themeColor}
+                style={{ transform: [{ scale: 1.5 }] }}
+                className="my-8"
+              />
+            ) : dashboardMode === "workspace" ? (
+              <View className="mb-6">
+                <View className="flex-row gap-3 mb-3">
+                  {/* Total Tasks Card */}
+                  <View
+                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
+                    style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                  >
+                    <Ionicons name="clipboard-outline" size={24} color={themeColor} />
+                    <View className="mt-2">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.textSecondary }}>
+                        Total Tasks
+                      </Text>
+                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
+                        {analytics?.summary?.total ?? stats.total}
+                      </Text>
+                    </View>
+                  </View>
+
                   {/* Completed Card */}
                   <View
-                    className="rounded-2xl p-3 flex-row items-center justify-between border"
-                    style={{ backgroundColor: "#1E2A24", borderColor: "#2C3B33" }}
+                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
+                    style={{ backgroundColor: isDarkMode ? "#1E2A24" : "#EBFBEE", borderColor: isDarkMode ? "#2C3B33" : "#D3F9D8" }}
                   >
-                    <View className="flex-1">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#79A88C" }}>
+                    <Ionicons name="checkmark-circle-outline" size={24} color="#5DCAA5" />
+                    <View className="mt-2">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? "#79A88C" : "#2B8A3E" }}>
                         Completed
                       </Text>
-                      <Text className="text-xl font-extrabold mt-0.5" style={{ color: C.textPrimary }}>{stats.completed}</Text>
-                    </View>
-                    <View className="w-8 h-8 rounded-lg items-center justify-center" style={{ backgroundColor: "#5DCAA5" }}>
-                      <Ionicons name="checkmark" size={15} color="#04342C" />
-                    </View>
-                  </View>
-
-                  {/* In Progress Card */}
-                  <View
-                    className="rounded-2xl p-3 flex-row items-center justify-between border"
-                    style={{ backgroundColor: "#241E2C", borderColor: "#332B3E" }}
-                  >
-                    <View className="flex-1">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#A89AB8" }}>
-                        In Progress
+                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
+                        {analytics?.summary?.completed ?? stats.completed}
                       </Text>
-                      <Text className="text-xl font-extrabold mt-0.5" style={{ color: C.textPrimary }}>{stats.inProgress}</Text>
-                    </View>
-                    <View className="w-8 h-8 rounded-lg items-center justify-center" style={{ backgroundColor: "#AFA9EC" }}>
-                      <Ionicons name="flash-outline" size={15} color="#26215C" />
-                    </View>
-                  </View>
-
-                  {/* Projects Card */}
-                  <View
-                    className="rounded-2xl p-3 flex-row items-center justify-between border"
-                    style={{ backgroundColor: "#2C2218", borderColor: "#3D3122" }}
-                  >
-                    <View className="flex-1">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#C7A87E" }}>
-                        Projects
-                      </Text>
-                      <Text className="text-xl font-extrabold mt-0.5" style={{ color: C.textPrimary }}>{projects.length}</Text>
-                    </View>
-                    <View className="w-8 h-8 rounded-lg items-center justify-center" style={{ backgroundColor: "#EF9F27" }}>
-                      <Ionicons name="rocket-outline" size={15} color="#412402" />
                     </View>
                   </View>
                 </View>
+
+                <View className="flex-row gap-3">
+                  {/* In Progress Card */}
+                  <View
+                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
+                    style={{ backgroundColor: isDarkMode ? "#241E2C" : "#F3F0FF", borderColor: isDarkMode ? "#332B3E" : "#E5DBFF" }}
+                  >
+                    <Ionicons name="flash-outline" size={24} color="#AFA9EC" />
+                    <View className="mt-2">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? "#A89AB8" : "#7048E8" }}>
+                        In Progress
+                      </Text>
+                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
+                        {analytics?.summary?.inProgress ?? stats.inProgress}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Overdue Card */}
+                  <View
+                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
+                    style={{
+                      backgroundColor: (analytics?.summary?.overdue ?? 0) > 0 ? (isDarkMode ? "rgba(226,75,74,0.1)" : "#FFF5F5") : (isDarkMode ? "#2C2218" : "#FFF9DB"),
+                      borderColor: (analytics?.summary?.overdue ?? 0) > 0 ? (isDarkMode ? "rgba(226,75,74,0.2)" : "#FFE3E3") : (isDarkMode ? "#3D3122" : "#FFF3BF"),
+                    }}
+                  >
+                    <Ionicons name="alert-circle-outline" size={24} color={(analytics?.summary?.overdue ?? 0) > 0 ? "#E24B4A" : "#EF9F27"} />
+                    <View className="mt-2">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: (analytics?.summary?.overdue ?? 0) > 0 ? "#E24B4A" : (isDarkMode ? "#C7A87E" : "#E8590C") }}>
+                        Overdue
+                      </Text>
+                      <Text className="text-2xl font-extrabold mt-1" style={{ color: (analytics?.summary?.overdue ?? 0) > 0 ? "#E24B4A" : C.textPrimary }}>
+                        {analytics?.summary?.overdue ?? 0}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View className="mb-6">
+                <View className="flex-row gap-3 mb-3">
+                  {/* Total Assigned */}
+                  <View
+                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
+                    style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                  >
+                    <Ionicons name="people-outline" size={24} color={themeColor} />
+                    <View className="mt-2">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.textSecondary }}>
+                        Assigned To Me
+                      </Text>
+                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
+                        {analytics?.personal?.total ?? 0}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Completed */}
+                  <View
+                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
+                    style={{ backgroundColor: isDarkMode ? "#1E2A24" : "#EBFBEE", borderColor: isDarkMode ? "#2C3B33" : "#D3F9D8" }}
+                  >
+                    <Ionicons name="checkmark-done-circle-outline" size={24} color="#5DCAA5" />
+                    <View className="mt-2">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? "#79A88C" : "#2B8A3E" }}>
+                        My Completed
+                      </Text>
+                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
+                        {analytics?.personal?.completed ?? 0}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View className="flex-row gap-3">
+                  {/* Completed This Week */}
+                  <View
+                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
+                    style={{ backgroundColor: isDarkMode ? "#241E2C" : "#F3F0FF", borderColor: isDarkMode ? "#332B3E" : "#E5DBFF" }}
+                  >
+                    <Ionicons name="calendar-outline" size={24} color="#AFA9EC" />
+                    <View className="mt-2">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? "#A89AB8" : "#7048E8" }}>
+                        Done This Week
+                      </Text>
+                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
+                        {analytics?.personal?.completedThisWeek ?? 0}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Overdue Assigned */}
+                  <View
+                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
+                    style={{
+                      backgroundColor: (analytics?.personal?.overdue ?? 0) > 0 ? (isDarkMode ? "rgba(226,75,74,0.1)" : "#FFF5F5") : (isDarkMode ? "#2C2218" : "#FFF9DB"),
+                      borderColor: (analytics?.personal?.overdue ?? 0) > 0 ? (isDarkMode ? "rgba(226,75,74,0.2)" : "#FFE3E3") : (isDarkMode ? "#3D3122" : "#FFF3BF"),
+                    }}
+                  >
+                    <Ionicons name="alert-circle-outline" size={24} color={(analytics?.personal?.overdue ?? 0) > 0 ? "#E24B4A" : "#EF9F27"} />
+                    <View className="mt-2">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: (analytics?.personal?.overdue ?? 0) > 0 ? "#E24B4A" : (isDarkMode ? "#C7A87E" : "#E8590C") }}>
+                        My Overdue
+                      </Text>
+                      <Text className="text-2xl font-extrabold mt-1" style={{ color: (analytics?.personal?.overdue ?? 0) > 0 ? "#E24B4A" : C.textPrimary }}>
+                        {analytics?.personal?.overdue ?? 0}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Circular completion rate layout */}
+                <View className="mt-4 p-4 rounded-2xl border flex-row items-center justify-between" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+                  <View>
+                    <Text className="text-sm font-bold" style={{ color: C.textPrimary }}>Completion Rate</Text>
+                    <Text className="text-xs" style={{ color: C.textSecondary }}>Ratio of completed assigned tasks</Text>
+                  </View>
+                  <Text className="text-2xl font-black" style={{ color: themeColor }}>{analytics?.personal?.completionRate ?? 0}%</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Project Progress Breakdown */}
+            {analytics?.projects && analytics.projects.length > 0 && (
+              <View className="mb-6">
+                <Text className="text-lg font-bold mb-4" style={{ color: C.textPrimary }}>Project Progress</Text>
+                {analytics.projects.map((proj: any) => {
+                  const progress = proj.total > 0 ? Math.round((proj.completed / proj.total) * 100) : 0;
+                  return (
+                    <View key={proj.projectId} className="mb-3 p-4 rounded-2xl border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+                      <View className="flex-row justify-between items-center mb-2">
+                        <View className="flex-row items-center">
+                          <View className="w-2.5 h-2.5 rounded-full mr-2.5" style={{ backgroundColor: proj.color }} />
+                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{proj.title}</Text>
+                        </View>
+                        <Text className="text-xs font-bold" style={{ color: themeColor }}>{progress}%</Text>
+                      </View>
+                      <View className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                        <View className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: proj.color }} />
+                      </View>
+                      <View className="flex-row justify-between mt-2">
+                        <Text className="text-[10px]" style={{ color: C.textSecondary }}>{proj.completed} of {proj.total} tasks completed</Text>
+                        {proj.overdue > 0 && (
+                          <Text className="text-[10px] font-bold" style={{ color: "#E24B4A" }}>
+                            {proj.overdue} overdue
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Team Productivity Leaderboard */}
+            {analytics?.productivity && analytics.productivity.length > 0 && (
+              <View className="mb-6 rounded-2xl p-5 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+                <Text className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: themeColor }}>
+                  Team Productivity
+                </Text>
+                {analytics.productivity.slice(0, 5).map((member: any) => {
+                  const pct = member.totalCount > 0 ? Math.round((member.completedCount / member.totalCount) * 100) : 0;
+                  return (
+                    <View key={member.userId} className="mb-4 last:mb-0">
+                      <View className="flex-row justify-between items-center mb-1.5">
+                        <View className="flex-row items-center flex-1 mr-2">
+                          <View className="w-6 h-6 rounded-full items-center justify-center mr-2.5" style={{ backgroundColor: C.divider }}>
+                            <Text className="font-bold text-[9px]" style={{ color: themeColor }}>
+                              {member.name.substring(0, 2).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text className="text-xs font-semibold" style={{ color: C.textPrimary }} numberOfLines={1}>
+                            {member.name}
+                          </Text>
+                        </View>
+                        <Text className="text-[10px]" style={{ color: C.textSecondary }}>
+                          {member.completedCount} / {member.totalCount} done ({pct}%)
+                        </Text>
+                      </View>
+                      <View className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
+                        <View className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: themeColor }} />
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             )}
 
@@ -642,6 +1075,42 @@ return (
                 <Text className="text-sm font-semibold" style={{ color: C.textPrimary }}>Kanban Board</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Activity Timeline */}
+            <Text className="text-lg font-bold mb-4" style={{ color: C.textPrimary }}>Recent Activity</Text>
+            {loadingActivities ? (
+              <ActivityIndicator size="small" color={themeColor} className="my-6" />
+            ) : activities.length === 0 ? (
+              <View className="rounded-2xl p-6 mb-8 border items-center justify-center" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+                <Ionicons name="time-outline" size={24} color={C.textMuted} style={{ marginBottom: 6 }} />
+                <Text className="text-sm" style={{ color: C.textSecondary }}>No activity recorded yet</Text>
+              </View>
+            ) : (
+              <View className="rounded-2xl p-5 mb-8 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+                {activities.slice(0, 5).map((act, idx) => {
+                  const isLast = idx === Math.min(activities.length, 5) - 1;
+                  return (
+                    <View key={act._id} className="flex-row mb-4 last:mb-0">
+                      {/* Left indicator line/dot */}
+                      <View className="items-center mr-3">
+                        <View className="w-6 h-6 rounded-full items-center justify-center" style={{ backgroundColor: C.input }}>
+                          <Ionicons name={getActivityIcon(act.action)} size={12} color={themeColor} />
+                        </View>
+                        {!isLast && <View className="w-[1.5px] flex-1 my-1" style={{ backgroundColor: C.divider }} />}
+                      </View>
+                      <View className="flex-1 pb-2">
+                        <Text className="text-sm font-semibold" style={{ color: C.textPrimary }}>
+                          {getFullName(act.user)} <Text className="font-normal" style={{ color: C.textSecondary }}>{act.details}</Text>
+                        </Text>
+                        <Text className="text-[10px] mt-1" style={{ color: C.textMuted }}>
+                          {new Date(act.createdAt).toLocaleString()}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </>
         ) : (
           <>
@@ -723,14 +1192,21 @@ return (
                       onPress={() => isMemberObject && handleOpenUserProfile(member.user)}
                       className="flex-1 mr-3 flex-row items-center"
                     >
-                      <View
-                        className="w-9 h-9 rounded-full items-center justify-center mr-3"
-                        style={{ backgroundColor: avatarColors.bg }}
-                      >
-                        <Text className="font-bold text-xs" style={{ color: avatarColors.text }}>
-                          {(firstname?.[0] || "").toUpperCase()}{(lastname?.[0] || "").toUpperCase()}
-                        </Text>
-                      </View>
+                      {isMemberObject && member.user.avatarUrl ? (
+                        <Image
+                          source={{ uri: member.user.avatarUrl }}
+                          className="w-9 h-9 rounded-full mr-3"
+                        />
+                      ) : (
+                        <View
+                          className="w-9 h-9 rounded-full items-center justify-center mr-3"
+                          style={{ backgroundColor: avatarColors.bg }}
+                        >
+                          <Text className="font-bold text-xs" style={{ color: avatarColors.text }}>
+                            {(firstname?.[0] || "").toUpperCase()}{(lastname?.[0] || "").toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
                       <View className="flex-1">
                         <Text className="font-semibold text-base" style={{ color: C.textPrimary }}>
                           {firstname} {lastname}{" "}
@@ -777,6 +1253,162 @@ return (
         )}
       </ScrollView>
 
+
+      {/* MODAL 3: Global Search */}
+      <Modal
+        visible={searchModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSearchModalVisible(false)}
+      >
+        <SafeAreaView className="flex-1" style={{ backgroundColor: C.bg }}>
+          {/* Header */}
+          <View className="flex-row items-center px-4 py-3 border-b" style={{ borderBottomColor: C.divider }}>
+            <TouchableOpacity onPress={() => { setSearchModalVisible(false); setGlobalQuery(""); setGlobalResults(null); }} className="mr-3 p-1">
+              <Ionicons name="arrow-back" size={24} color={C.textPrimary} />
+            </TouchableOpacity>
+            <View className="flex-1 rounded-xl px-4 py-2 border flex-row items-center" style={{ backgroundColor: C.input, borderColor: C.inputBorder }}>
+              <Ionicons name="search-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                className="flex-1 py-1 text-sm text-white"
+                placeholder="Search workspaces, projects, tasks..."
+                placeholderTextColor={C.textMuted}
+                autoFocus
+                value={globalQuery}
+                onChangeText={setGlobalQuery}
+              />
+              {searchingGlobal && <ActivityIndicator size="small" color={themeColor} />}
+            </View>
+          </View>
+
+          <ScrollView className="flex-1 px-5 pt-4">
+            {globalResults ? (
+              <View className="pb-10">
+                {/* Tasks Section */}
+                {globalResults.tasks?.length > 0 && (
+                  <View className="mb-6">
+                    <Text className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: themeColor }}>Tasks</Text>
+                    {globalResults.tasks.map((task: any) => (
+                      <TouchableOpacity
+                        key={task._id}
+                        onPress={() => handleSelectTaskFromSearch(task)}
+                        className="p-3 mb-2 rounded-xl border flex-row items-center justify-between"
+                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                      >
+                        <View className="flex-1 mr-2">
+                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{task.title}</Text>
+                          <Text className="text-xs mt-1" style={{ color: C.textSecondary }}>Project: {task.project?.name || "Unknown"}</Text>
+                        </View>
+                        <View className="px-2 py-0.5 rounded" style={{ backgroundColor: C.tagBg }}>
+                          <Text className="text-[10px] font-bold uppercase" style={{ color: C.tagText }}>{task.status}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Projects Section */}
+                {globalResults.projects?.length > 0 && (
+                  <View className="mb-6">
+                    <Text className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: themeColor }}>Projects</Text>
+                    {globalResults.projects.map((proj: any) => (
+                      <TouchableOpacity
+                        key={proj._id}
+                        onPress={() => handleSelectProjectFromSearch(proj)}
+                        className="p-3 mb-2 rounded-xl border flex-row items-center justify-between"
+                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                      >
+                        <View className="flex-1">
+                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{proj.name}</Text>
+                          <Text className="text-xs mt-1" style={{ color: C.textSecondary }}>Workspace: {proj.workspace?.name || "Unknown"}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={themeColor} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Workspaces Section */}
+                {globalResults.workspaces?.length > 0 && (
+                  <View className="mb-6">
+                    <Text className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: themeColor }}>Workspaces</Text>
+                    {globalResults.workspaces.map((ws: any) => (
+                      <TouchableOpacity
+                        key={ws._id}
+                        onPress={() => handleSelectWorkspaceFromSearch(ws)}
+                        className="p-3 mb-2 rounded-xl border flex-row items-center justify-between"
+                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                      >
+                        <View className="flex-1 mr-2">
+                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{ws.name}</Text>
+                          {ws.description ? <Text className="text-xs mt-1" style={{ color: C.textSecondary }} numberOfLines={1}>{ws.description}</Text> : null}
+                        </View>
+                        <Ionicons name="briefcase-outline" size={16} color={themeColor} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Members Section */}
+                {globalResults.users?.length > 0 && (
+                  <View className="mb-6">
+                    <Text className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: themeColor }}>Members</Text>
+                    {globalResults.users.map((item: any) => (
+                      <TouchableOpacity
+                        key={item._id}
+                        onPress={() => handleOpenUserProfile(item)}
+                        className="p-3 mb-2 rounded-xl border flex-row items-center"
+                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                      >
+                        {item.avatarUrl ? (
+                          <Image
+                            source={{ uri: item.avatarUrl }}
+                            className="w-8 h-8 rounded-full mr-3"
+                          />
+                        ) : (
+                          <View
+                            className="w-8 h-8 rounded-full items-center justify-center mr-3"
+                            style={{ backgroundColor: C.input }}
+                          >
+                            <Text className="font-bold text-xs" style={{ color: themeColor }}>
+                              {getInitials(item)}
+                            </Text>
+                          </View>
+                        )}
+                        <View className="flex-1">
+                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{getFullName(item)}</Text>
+                          <Text className="text-xs" style={{ color: C.textSecondary }}>{item.email}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Empty State when Query is run but all categories are empty */}
+                {(!globalResults.tasks?.length &&
+                  !globalResults.projects?.length &&
+                  !globalResults.workspaces?.length &&
+                  !globalResults.users?.length) && (
+                    <View className="items-center justify-center py-10">
+                      <Ionicons name="search-outline" size={32} color={C.textMuted} className="mb-2" />
+                      <Text className="text-sm" style={{ color: C.textSecondary }}>No results found for "{globalQuery}"</Text>
+                    </View>
+                )}
+              </View>
+            ) : (
+              globalQuery.trim().length > 0 ? null : (
+                <View className="items-center justify-center py-20">
+                  <Ionicons name="search-outline" size={48} color={C.textMuted} className="mb-3" />
+                  <Text className="text-sm text-center px-6" style={{ color: C.textSecondary }}>
+                    Search for workspaces, projects, tasks, or team members across all your spaces.
+                  </Text>
+                </View>
+              )
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       {/* MODAL 1: Workspace Selector Dropdown */}
       <Modal
         visible={workspaceMenuVisible}
@@ -808,7 +1440,19 @@ return (
                       borderColor: isActive ? themeColor : C.cardBorder,
                     }}
                   >
-                    <Text className="font-semibold text-base" style={{ color: C.textPrimary }}>{w.name}</Text>
+                    <View className="flex-row items-center flex-1 mr-2">
+                      {w.logoUrl ? (
+                        <Image 
+                          source={{ uri: w.logoUrl }} 
+                          style={{ width: 24, height: 24, borderRadius: 4, marginRight: 12 }} 
+                        />
+                      ) : (
+                        <View className="w-6 h-6 rounded bg-zinc-800 mr-3 items-center justify-center">
+                          <Ionicons name="briefcase-outline" size={12} color={themeColor} />
+                        </View>
+                      )}
+                      <Text className="font-semibold text-base flex-1" style={{ color: C.textPrimary }} numberOfLines={1}>{w.name}</Text>
+                    </View>
                     {isActive && <Ionicons name="checkmark" size={18} color={themeColor} />}
                   </TouchableOpacity>
                 );
@@ -849,6 +1493,23 @@ return (
             <Text className="text-sm mb-6" style={{ color: C.textSecondary }}>
               Workspace actions for "{activeWorkspace?.name}"
             </Text>
+
+            {canManage && (
+              <TouchableOpacity
+                onPress={handleUploadLogo}
+                className="py-4 rounded-2xl items-center mb-4 flex-row justify-center border"
+                style={{ backgroundColor: C.input, borderColor: C.inputBorder }}
+              >
+                {uploadingLogo ? (
+                  <ActivityIndicator size="small" color={themeColor} />
+                ) : (
+                  <>
+                    <Ionicons name="image-outline" size={17} color={themeColor} style={{ marginRight: 8 }} />
+                    <Text className="font-bold text-base" style={{ color: C.textPrimary }}>Upload Workspace Logo</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
 
             {isOwner ? (
               <TouchableOpacity
@@ -901,17 +1562,25 @@ return (
           >
             {/* Header with avatar */}
             <View className="items-center mb-6">
-              <View
-                className="w-20 h-20 rounded-full items-center justify-center border-2 mb-3"
-                style={{ backgroundColor: getAvatarColors(selectedUserForProfile?.username?.firstname || "").bg, borderColor: C.inputBorder }}
-              >
-                <Text
-                  className="text-2xl font-bold"
-                  style={{ color: getAvatarColors(selectedUserForProfile?.username?.firstname || "").text }}
+              {selectedUserForProfile?.avatarUrl ? (
+                <Image
+                  source={{ uri: selectedUserForProfile.avatarUrl }}
+                  className="w-20 h-20 rounded-full border-2 mb-3"
+                  style={{ borderColor: C.inputBorder }}
+                />
+              ) : (
+                <View
+                  className="w-20 h-20 rounded-full items-center justify-center border-2 mb-3"
+                  style={{ backgroundColor: getAvatarColors(selectedUserForProfile?.username?.firstname || "").bg, borderColor: C.inputBorder }}
                 >
-                  {selectedUserForProfile ? getInitials(selectedUserForProfile) : "?"}
-                </Text>
-              </View>
+                  <Text
+                    className="text-2xl font-bold"
+                    style={{ color: getAvatarColors(selectedUserForProfile?.username?.firstname || "").text }}
+                  >
+                    {selectedUserForProfile ? getInitials(selectedUserForProfile) : "?"}
+                  </Text>
+                </View>
+              )}
               <Text className="text-xl font-bold" style={{ color: C.textPrimary }}>
                 {selectedUserForProfile ? getFullName(selectedUserForProfile) : "User Profile"}
               </Text>

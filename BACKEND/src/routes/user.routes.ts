@@ -1,7 +1,8 @@
 import { Router } from "express"; // Use import instead of require
 import { body } from "express-validator";
-import { signup, login, profile, logout,updateUserProfile,forgetPass } from "../controllers/user.controller";
+import { signup, login, profile, logout,updateUserProfile,forgetPass, updatePreferences, togglePinProjectController, togglePinTaskController, getPinnedItemsController, updateAvatarController, saveFilterController, getSavedFiltersController, deleteSavedFilterController } from "../controllers/user.controller";
 import { userauth } from "../middleware/auth.middleware";
+import { upload } from "../middleware/upload.middleware";
 
 const router = Router();
 
@@ -60,6 +61,18 @@ router.get('/forget-password', [
     body("email").isEmail().withMessage("Invalid email format").notEmpty(),
 ], forgetPass)
 router.get("/profile", userauth, profile);
+router.put("/preferences", userauth, updatePreferences);
 router.post("/logout", userauth, logout);
+
+// Pinning routes
+router.post("/pin-project/:projectId", userauth, togglePinProjectController);
+router.post("/pin-task/:taskId", userauth, togglePinTaskController);
+router.get("/pinned", userauth, getPinnedItemsController);
+
+// Profile avatar and saved filters routes
+router.put("/profile/avatar", userauth, upload.single("avatar"), updateAvatarController);
+router.post("/saved-filters", userauth, saveFilterController);
+router.get("/saved-filters/:projectId", userauth, getSavedFiltersController);
+router.delete("/saved-filters/:filterId", userauth, deleteSavedFilterController);
 
 export default router;

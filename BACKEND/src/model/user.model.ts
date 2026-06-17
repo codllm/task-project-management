@@ -23,6 +23,27 @@ export interface IUser extends Document, IUserMethods {
   updatedAt: Date;
   usertype: string;
   phone?: number;
+  notificationPreferences?: {
+    comments: boolean;
+    assignments: boolean;
+    mentions: boolean;
+    reminders: boolean;
+  };
+  pinnedProjects?: mongoose.Types.ObjectId[];
+  pinnedTasks?: mongoose.Types.ObjectId[];
+  avatarUrl?: string;
+  savedFilters?: {
+    name: string;
+    project: mongoose.Types.ObjectId;
+    query: {
+      assignee?: string | null;
+      priority?: string | null;
+      dueDate?: string | null;
+      label?: string | null;
+      sortBy?: string;
+      sortOrder?: string;
+    };
+  }[];
 }
 
 //  Pass both IUser and the custom methods type to the Schema definition
@@ -67,7 +88,43 @@ const UserSchema = new Schema<IUser, {}, IUserMethods>({
   phone:{
     type: Number,
     required: false,
-  }
+  },
+  notificationPreferences: {
+    comments: { type: Boolean, default: true },
+    assignments: { type: Boolean, default: true },
+    mentions: { type: Boolean, default: true },
+    reminders: { type: Boolean, default: true },
+  },
+  pinnedProjects: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "Project",
+    },
+  ],
+  pinnedTasks: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "Task",
+    },
+  ],
+  avatarUrl: {
+    type: String,
+    default: "",
+  },
+  savedFilters: [
+    {
+      name: { type: String, required: true },
+      project: { type: Schema.Types.ObjectId, ref: "Project", required: true },
+      query: {
+        assignee: { type: String, default: null },
+        priority: { type: String, default: null },
+        dueDate: { type: String, default: null },
+        label: { type: String, default: null },
+        sortBy: { type: String, default: "position" },
+        sortOrder: { type: String, default: "asc" },
+      },
+    },
+  ],
 }, {
   timestamps: true,
 });
