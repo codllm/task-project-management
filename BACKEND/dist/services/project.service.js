@@ -17,7 +17,8 @@ exports.getProjectMembers = exports.changeProjectRole = exports.removeMemberFrom
 const mongoose_1 = __importDefault(require("mongoose"));
 const project_model_1 = __importDefault(require("../model/project.model"));
 const workspace_model_1 = __importDefault(require("../model/workspace.model"));
-const createProject = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name, description, workspace, createdBy, deadline, }) {
+const notification_service_1 = require("./notification.service");
+const createProject = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name, description, workspace, createdBy, deadline, color, }) {
     const workspaceExists = yield workspace_model_1.default.findById(workspace);
     if (!workspaceExists) {
         throw new Error("Workspace not found");
@@ -28,6 +29,7 @@ const createProject = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name,
         workspace,
         createdBy,
         deadline,
+        color,
         members: [
             {
                 user: createdBy,
@@ -35,6 +37,21 @@ const createProject = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name,
             },
         ],
     });
+    const otherMembers = workspaceExists.members.filter((m) => {
+        const memberUserId = (m && typeof m === "object" && m.user) ? m.user.toString() : (m ? m.toString() : "");
+        return memberUserId !== createdBy.toString() && memberUserId !== "";
+    });
+    for (const member of otherMembers) {
+        const memberUserId = (member && typeof member === "object" && member.user) ? member.user.toString() : member.toString();
+        yield (0, notification_service_1.createNotification)({
+            recipient: memberUserId,
+            sender: createdBy.toString(),
+            type: "PROJECT_ADDED",
+            title: "New Project Added",
+            message: `A new project "${project.name}" was added to workspace "${workspaceExists.name}"`,
+            link: `/projects/${project._id}`,
+        });
+    }
     return project;
 });
 exports.createProject = createProject;
@@ -54,7 +71,7 @@ exports.getProjectById = getProjectById;
 const getWorkspaceProjects = (workspaceId) => __awaiter(void 0, void 0, void 0, function* () {
     const projects = yield project_model_1.default.find({
         workspace: workspaceId,
-    });
+    }).populate("members.user");
     return projects;
 });
 exports.getWorkspaceProjects = getWorkspaceProjects;

@@ -7,7 +7,7 @@ import {
 import { ZodObject } from "zod";
 
 export const validate = (
-  schema: AnyZodObject
+  schema: ZodObject<any, any>
 ) => {
 
   return (

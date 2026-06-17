@@ -42,10 +42,12 @@ export const getProjectTasksController = async (
 ) => {
   try {
 
-    const  projectId  = req.params.projectId as string;
+    const projectId = req.params.projectId as string;
+    const userId = (req as any).user._id;
 
     const tasks = await getProjectTasksService(
-      projectId
+      projectId,
+      userId
     );
 
     return res.status(200).json({
@@ -69,9 +71,10 @@ export const getSingleTaskController = async (
 ) => {
   try {
 
-    const  taskId  = req.params.taskId as string;
+    const taskId = req.params.taskId as string;
+    const userId = (req as any).user._id;
 
-    const task = await getSingleTaskService(taskId);
+    const task = await getSingleTaskService(taskId, userId);
 
     return res.status(200).json({
       success: true,
@@ -95,15 +98,18 @@ export const updateTaskController = async (
   try {
 
     const { taskId } = req.params;
+    const userId = (req as any).user._id;
 
     const updatedTask = await updateTaskService(
       taskId as string,
-      req.body
+      req.body,
+      userId
     );
 
     return res.status(200).json({
       success: true,
       updatedTask,
+      task: updatedTask,
     });
 
   } catch (error) {

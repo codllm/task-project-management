@@ -17,12 +17,12 @@ export interface IUser extends Document, IUserMethods {
   }
   email: string;
   password: string;
-  age: number;
+  age?: number;
   gender:string,
   createdAt: Date;
   updatedAt: Date;
   usertype: string;
-  phone:number;
+  phone?: number;
 }
 
 //  Pass both IUser and the custom methods type to the Schema definition
@@ -53,7 +53,7 @@ const UserSchema = new Schema<IUser, {}, IUserMethods>({
   },
   age: {
     type: Number,
-    required: true,
+    required: false,
   },
   gender:{
     type: String,

@@ -7,14 +7,13 @@ interface CreateUserInput {
   lastname: string;
   email: string;
   password: string;
-  age: number;
   gender: string;
   usertype: string;
-  phone:number;
+  phone: number;
 }
 
 export const createUser = async (userData: CreateUserInput): Promise<IUser> => {
-  const { firstname, lastname, email, password, age, gender, usertype,phone } = userData;
+  const { firstname, lastname, email, password, gender, usertype, phone } = userData;
 
   // Simple runtime validation fallback
   if (
@@ -22,9 +21,9 @@ export const createUser = async (userData: CreateUserInput): Promise<IUser> => {
     lastname == null ||
     email == null ||
     password == null ||
-    age == null ||
     gender == null ||
-    usertype == null
+    usertype == null ||
+    phone == null
   ) {  
     throw new Error("All fields are required");
   }
@@ -44,9 +43,8 @@ export const createUser = async (userData: CreateUserInput): Promise<IUser> => {
     email,
     password, // Consider hashing this here using your schema method if you don't use pre-save hooks
     gender,
-    age,
     usertype,
-    phone: 0, // Default value for phone, adjust as needed
+    phone, // Save actual phone number
   });
 
   // Hashing password using the custom instance method we wrote earlier!

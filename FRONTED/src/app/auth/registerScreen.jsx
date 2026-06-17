@@ -10,52 +10,73 @@ import {
   ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { registerApi } from "../../api/user.api";
+import { useApp } from "../../context/AppContext";
 
-const USER_TYPES = ["individual", "team", "admin"];
-const GENDERS = ["male", "female", "other"];
+const USER_TYPES = [
+  { value: "individual", label: "Individual" },
+  { value: "team", label: "Team" },
+  { value: "admin", label: "Admin" },
+];
+const GENDERS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+];
+
+// Keep these tokens identical to login.jsx so both screens read as one flow.
+// Ice blue two-tone palette: the whole screen is the gradient, the card
+// floats on top as frosted glass rather than a flat white panel.
+const COLORS = {
+  gradientFrom: "#BEE3F8",
+  gradientVia: "#6FB6E0",
+  gradientTo: "#2E7FB8",
+  cardGlass: "rgba(255,255,255,0.16)",
+  cardBorder: "rgba(255,255,255,0.35)",
+  input: "rgba(255,255,255,0.92)",
+  inputBorder: "rgba(255,255,255,0.6)",
+  inputFocused: "#FFFFFF",
+  textOnGlassPrimary: "#FFFFFF",
+  textOnGlassSecondary: "#EAF6FD",
+  textInInput: "#16313D",
+  placeholder: "#9CB9C7",
+  iconMuted: "#6FA8CC",
+  divider: "rgba(255,255,255,0.35)",
+  accentText: "#2E7FB8",
+  dangerBg: "rgba(255,255,255,0.18)",
+  dangerBorder: "rgba(255,255,255,0.4)",
+  white: "#FFFFFF",
+  segmentActiveBg: "#FFFFFF",
+  segmentInactiveBg: "rgba(255,255,255,0.22)",
+  segmentInactiveBorder: "rgba(255,255,255,0.4)",
+};
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { setToken, setUser } = useApp();
   const [form, setForm] = useState({
     firstname: "",
     lastname: "",
     email: "",
     password: "",
-    confirmPassword: "",
-    age: "",
+    phone: "",
     gender: "male",
     usertype: "individual",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleRegister = async () => {
-    const {
-      firstname,
-      lastname,
-      email,
-      password,
-      confirmPassword,
-      age,
-      gender,
-      usertype,
-    } = form;
+    const { firstname, lastname, email, password, phone, gender, usertype } = form;
 
-    if (!firstname || !lastname || !email || !password || !age) {
+    if (!firstname || !lastname || !email || !password || !phone) {
       setError("Please fill in all required fields.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-    if (isNaN(Number(age)) || Number(age) < 1) {
-      setError("Please enter a valid age.");
       return;
     }
 
@@ -67,268 +88,276 @@ export default function RegisterScreen() {
         lastname,
         email: email.trim(),
         password,
-        age: Number(age),
+        phone: phone.trim(),
         gender,
-        usertype: usertype,
+        usertype,
       });
 
       if (data.success && data.token) {
-        await SecureStore.setItemAsync("token", data.token);
-        await SecureStore.setItemAsync("User", JSON.stringify(data.user));
+        await setToken(data.token);
+        await setUser(data.user);
         router.replace("/(tabs)/home");
       } else {
         setError(data.message || "Registration failed. Try again.");
       }
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        "Registration failed. Check your connection.";
+      let msg = "Registration failed. Check your connection.";
+      if (err?.response?.data?.message) {
+        msg = err.response.data.message;
+      } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+        msg = err.response.data.errors.map((e) => e.msg).join(", ");
+      }
       setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-[#0F0E17]"
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+  const inputBorderColor = (field) =>
+    focusedField === field ? COLORS.inputFocused : "transparent";
+
+  const renderInput = ({ field, label, icon, placeholder, keyboardType, secure, autoCapitalize = "sentences" }) => (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+        {label}
+      </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          backgroundColor: COLORS.input,
+          borderWidth: 1.5,
+          borderColor: inputBorderColor(field),
+          borderRadius: 16,
+          paddingHorizontal: 14,
+          gap: 10,
+        }}
       >
-        {/* Background blob */}
-        <View className="absolute top-0 left-0 right-0 h-64 bg-[#6C63FF] opacity-20 rounded-b-[80px]" />
+        <Ionicons name={icon} size={18} color={COLORS.iconMuted} />
+        <TextInput
+          style={{ flex: 1, color: COLORS.textInInput, paddingVertical: 14, fontSize: 15 }}
+          placeholder={placeholder}
+          placeholderTextColor={COLORS.placeholder}
+          value={form[field]}
+          onChangeText={(v) => update(field, v)}
+          onFocus={() => setFocusedField(field)}
+          onBlur={() => setFocusedField(null)}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={false}
+          secureTextEntry={secure && !showPassword}
+        />
+        {secure && (
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={COLORS.accentText} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
 
-        <View className="flex-1 px-6 pt-16 pb-10">
-          {/* Header */}
-          <View className="mb-8">
-            <TouchableOpacity onPress={() => router.back()} className="mb-4">
-              <Text className="text-[#6C63FF] text-base">← Back</Text>
-            </TouchableOpacity>
-            <View className="w-14 h-14 rounded-2xl bg-[#6C63FF] items-center justify-center mb-4">
-              <Text className="text-white text-2xl font-bold">T</Text>
-            </View>
-            <Text className="text-white text-4xl font-bold tracking-tight">
-              Create account
-            </Text>
-            <Text className="text-[#9B9BAE] text-base mt-2">
-              Join TaskFlow and manage work smarter
-            </Text>
-          </View>
-
-          {/* Form Card */}
-          <View className="bg-[#1C1B2E] rounded-3xl p-6 shadow-xl">
-            {/* Name Row */}
-            <View className="flex-row gap-3 mb-4">
-              <View className="flex-1">
-                <Text className="text-[#9B9BAE] text-sm mb-2 font-medium">
-                  First Name *
-                </Text>
-                <View className="bg-[#252438] rounded-2xl px-4">
-                  <TextInput
-                    className="text-white py-4 text-base"
-                    placeholder="John"
-                    placeholderTextColor="#555468"
-                    value={form.firstname}
-                    onChangeText={(v) => update("firstname", v)}
-                  />
-                </View>
-              </View>
-              <View className="flex-1">
-                <Text className="text-[#9B9BAE] text-sm mb-2 font-medium">
-                  Last Name *
-                </Text>
-                <View className="bg-[#252438] rounded-2xl px-4">
-                  <TextInput
-                    className="text-white py-4 text-base"
-                    placeholder="Doe"
-                    placeholderTextColor="#555468"
-                    value={form.lastname}
-                    onChangeText={(v) => update("lastname", v)}
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Email */}
-            <View className="mb-4">
-              <Text className="text-[#9B9BAE] text-sm mb-2 font-medium">
-                Email Address *
-              </Text>
-              <View className="bg-[#252438] rounded-2xl px-4">
-                <TextInput
-                  className="text-white py-4 text-base"
-                  placeholder="you@example.com"
-                  placeholderTextColor="#555468"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  value={form.email}
-                  onChangeText={(v) => update("email", v)}
-                />
-              </View>
-            </View>
-
-            {/* Password */}
-            <View className="mb-4">
-              <Text className="text-[#9B9BAE] text-sm mb-2 font-medium">
-                Password *
-              </Text>
-              <View className="bg-[#252438] rounded-2xl flex-row items-center px-4">
-                <TextInput
-                  className="flex-1 text-white py-4 text-base"
-                  placeholder="Min. 3 characters"
-                  placeholderTextColor="#555468"
-                  secureTextEntry={!showPassword}
-                  value={form.password}
-                  onChangeText={(v) => update("password", v)}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                >
-                  <Text className="text-[#6C63FF] text-sm font-semibold">
-                    {showPassword ? "Hide" : "Show"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Confirm Password */}
-            <View className="mb-4">
-              <Text className="text-[#9B9BAE] text-sm mb-2 font-medium">
-                Confirm Password *
-              </Text>
-              <View className="bg-[#252438] rounded-2xl px-4">
-                <TextInput
-                  className="text-white py-4 text-base"
-                  placeholder="Repeat password"
-                  placeholderTextColor="#555468"
-                  secureTextEntry={!showPassword}
-                  value={form.confirmPassword}
-                  onChangeText={(v) => update("confirmPassword", v)}
-                />
-              </View>
-            </View>
-
-            {/* Age */}
-            <View className="mb-4">
-              <Text className="text-[#9B9BAE] text-sm mb-2 font-medium">
-                Age *
-              </Text>
-              <View className="bg-[#252438] rounded-2xl px-4">
-                <TextInput
-                  className="text-white py-4 text-base"
-                  placeholder="e.g. 25"
-                  placeholderTextColor="#555468"
-                  keyboardType="numeric"
-                  value={form.age}
-                  onChangeText={(v) => update("age", v)}
-                />
-              </View>
-            </View>
-
-            {/* Gender Selector */}
-            <View className="mb-4">
-              <Text className="text-[#9B9BAE] text-sm mb-2 font-medium">
-                Gender
-              </Text>
-              <View className="flex-row gap-2">
-                {GENDERS.map((g) => (
-                  <TouchableOpacity
-                    key={g}
-                    onPress={() => update("gender", g)}
-                    className={`flex-1 py-3 rounded-xl items-center border ${
-                      form.gender === g
-                        ? "bg-[#6C63FF] border-[#6C63FF]"
-                        : "bg-[#252438] border-[#252438]"
-                    }`}
-                  >
-                    <Text
-                      className={`text-sm font-semibold capitalize ${
-                        form.gender === g ? "text-white" : "text-[#9B9BAE]"
-                      }`}
-                    >
-                      {g}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* User Type Selector */}
-            <View className="mb-6">
-              <Text className="text-[#9B9BAE] text-sm mb-2 font-medium">
-                Account Type
-              </Text>
-              <View className="flex-row gap-2">
-                {USER_TYPES.map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    onPress={() => update("usertype", t)}
-                    className={`flex-1 py-3 rounded-xl items-center border ${
-                      form.usertype === t
-                        ? "bg-[#6C63FF] border-[#6C63FF]"
-                        : "bg-[#252438] border-[#252438]"
-                    }`}
-                  >
-                    <Text
-                      className={`text-xs font-semibold capitalize ${
-                        form.usertype === t ? "text-white" : "text-[#9B9BAE]"
-                      }`}
-                    >
-                      {t}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Error */}
-            {error ? (
-              <View className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4">
-                <Text className="text-red-400 text-sm text-center">
-                  {error}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Register Button */}
-            <TouchableOpacity
-              onPress={handleRegister}
-              disabled={loading}
-              className="bg-[#6C63FF] rounded-2xl py-4 items-center shadow-lg"
+  const renderSegmented = (options, field) => (
+    <View style={{ flexDirection: "row", gap: 8 }}>
+      {options.map((opt) => {
+        const active = form[field] === opt.value;
+        return (
+          <TouchableOpacity
+            key={opt.value}
+            onPress={() => update(field, opt.value)}
+            activeOpacity={0.85}
+            style={{
+              flex: 1,
+              paddingVertical: 11,
+              borderRadius: 13,
+              alignItems: "center",
+              backgroundColor: active ? COLORS.segmentActiveBg : COLORS.segmentInactiveBg,
+              borderWidth: 1.5,
+              borderColor: active ? COLORS.segmentActiveBg : COLORS.segmentInactiveBorder,
+            }}
+          >
+            <Text
               style={{
-                shadowColor: "#6C63FF",
-                shadowOpacity: 0.5,
-                shadowRadius: 12,
+                fontSize: 13,
+                fontWeight: "600",
+                color: active ? COLORS.accentText : COLORS.white,
               }}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text className="text-white font-bold text-base tracking-wide">
-                  Create Account
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Login Link */}
-          <View className="flex-row justify-center mt-8">
-            <Text className="text-[#9B9BAE] text-base">
-              Already have an account?{" "}
+              {opt.label}
             </Text>
-            <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-              <Text className="text-[#6C63FF] font-bold text-base">
-                Sign In
-              </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  return (
+    <LinearGradient
+      colors={[COLORS.gradientFrom, COLORS.gradientVia, COLORS.gradientTo]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ flex: 1 }}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ paddingHorizontal: 24, paddingTop: 56, paddingBottom: 32 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 18 }}
+              hitSlop={8}
+            >
+              <Ionicons name="arrow-back" size={16} color={COLORS.white} />
+              <Text style={{ color: COLORS.white, fontSize: 14, fontWeight: "600" }}>Back</Text>
             </TouchableOpacity>
+
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 16,
+                backgroundColor: COLORS.white,
+                alignItems: "center",
+                justifyContent: "center",
+                shadowColor: "#0C3C5A",
+                shadowOpacity: 0.25,
+                shadowRadius: 14,
+                shadowOffset: { width: 0, height: 8 },
+                elevation: 6,
+              }}
+            >
+              <Ionicons name="flash" size={26} color={COLORS.accentText} />
+            </View>
+
+            <Text style={{ color: COLORS.textOnGlassPrimary, fontSize: 28, fontWeight: "700", marginTop: 18, letterSpacing: -0.5 }}>
+              Create account
+            </Text>
+            <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 15, marginTop: 6, marginBottom: 28 }}>
+              Join TaskFlow and manage work smarter
+            </Text>
+
+            <View
+              style={{
+                backgroundColor: COLORS.cardGlass,
+                borderRadius: 24,
+                borderWidth: 1,
+                borderColor: COLORS.cardBorder,
+                padding: 22,
+              }}
+            >
+              {/* Name row */}
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  {renderInput({ field: "firstname", label: "First name", icon: "person-outline", placeholder: "John" })}
+                </View>
+                <View style={{ flex: 1 }}>
+                  {renderInput({ field: "lastname", label: "Last name", icon: "person-outline", placeholder: "Doe" })}
+                </View>
+              </View>
+
+              {renderInput({
+                field: "email",
+                label: "Email address",
+                icon: "mail-outline",
+                placeholder: "you@example.com",
+                keyboardType: "email-address",
+                autoCapitalize: "none",
+              })}
+
+              {renderInput({
+                field: "password",
+                label: "Password",
+                icon: "lock-closed-outline",
+                placeholder: "Min. 3 characters",
+                secure: true,
+                autoCapitalize: "none",
+              })}
+
+              {renderInput({
+                field: "phone",
+                label: "Phone number",
+                icon: "call-outline",
+                placeholder: "e.g. 9876543210",
+                keyboardType: "phone-pad",
+              })}
+
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+                  Gender
+                </Text>
+                {renderSegmented(GENDERS, "gender")}
+              </View>
+
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+                  Account type
+                </Text>
+                {renderSegmented(USER_TYPES, "usertype")}
+              </View>
+
+              {error ? (
+                <View
+                  style={{
+                    backgroundColor: COLORS.dangerBg,
+                    borderWidth: 1,
+                    borderColor: COLORS.dangerBorder,
+                    borderRadius: 14,
+                    padding: 12,
+                    marginBottom: 16,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons name="alert-circle-outline" size={16} color={COLORS.white} />
+                  <Text style={{ color: COLORS.white, fontSize: 13, flex: 1 }}>{error}</Text>
+                </View>
+              ) : null}
+
+              <TouchableOpacity
+                onPress={handleRegister}
+                disabled={loading}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: COLORS.white,
+                  borderRadius: 16,
+                  paddingVertical: 16,
+                  alignItems: "center",
+                  shadowColor: "#0C3C5A",
+                  shadowOpacity: 0.25,
+                  shadowRadius: 14,
+                  shadowOffset: { width: 0, height: 6 },
+                  elevation: 4,
+                }}
+              >
+                {loading ? (
+                  <ActivityIndicator color={COLORS.accentText} />
+                ) : (
+                  <Text style={{ color: COLORS.accentText, fontWeight: "700", fontSize: 15, letterSpacing: 0.3 }}>
+                    Create account
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 26 }}>
+              <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 14 }}>
+                Already have an account?{" "}
+              </Text>
+              <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
+                <Text style={{ color: COLORS.white, fontWeight: "700", fontSize: 14 }}>
+                  Sign in
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }

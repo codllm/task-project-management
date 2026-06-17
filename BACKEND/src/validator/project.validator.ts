@@ -17,6 +17,10 @@ export const createProjectSchema = z.object({
     .string()
     .optional(),
 
+  color: z
+    .string()
+    .optional(),
+
 });
 
 export const updateProjectSchema = z.object({

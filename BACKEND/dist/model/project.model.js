@@ -44,6 +44,10 @@ const projectSchema = new mongoose_1.Schema({
     description: {
         type: String,
     },
+    color: {
+        type: String,
+        default: "#6C63FF",
+    },
     workspace: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Workspace",

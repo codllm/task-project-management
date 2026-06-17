@@ -16,7 +16,7 @@ const createCommentController = (req, res) => __awaiter(void 0, void 0, void 0, 
         const { content } = req.body;
         const taskId = req.params.taskId;
         const userId = req.user._id;
-        const comment = yield (0, comment_service_1.createCommentService)(content, taskId, userId.toString());
+        const comment = yield (0, comment_service_1.createCommentService)(content, taskId, userId);
         return res.status(201).json({
             success: true,
             comment,
@@ -25,7 +25,7 @@ const createCommentController = (req, res) => __awaiter(void 0, void 0, void 0, 
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to create comment",
+            message: "Failed to create comment",
         });
     }
 });
@@ -42,7 +42,7 @@ const getTaskCommentsController = (req, res) => __awaiter(void 0, void 0, void 0
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to fetch comments",
+            message: "Failed to fetch comments",
         });
     }
 });
@@ -53,13 +53,13 @@ const deleteCommentController = (req, res) => __awaiter(void 0, void 0, void 0, 
         yield (0, comment_service_1.deleteCommentService)(commentId);
         return res.status(200).json({
             success: true,
-            message: "Comment deleted successfully",
+            message: "Comment deleted",
         });
     }
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to delete comment",
+            message: "Failed to delete comment",
         });
     }
 });

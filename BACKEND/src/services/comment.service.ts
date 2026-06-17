@@ -30,21 +30,24 @@ export const createCommentService = async (
 
     emitToProject(task.project.toString(), "comment:created", populatedComment);
 
-    if (task.assignedTo && task.assignedTo.toString() !== userId.toString()) {
-      await createNotification({
-        recipient: task.assignedTo.toString(),
-        sender: userId,
-        type: "COMMENT_ADDED",
-        title,
-        message,
-        link,
-      });
+    const assigneesList = task.assignedTo ? (task.assignedTo as any[]).map(a => a.toString()) : [];
+    for (const assigneeId of assigneesList) {
+      if (assigneeId !== userId.toString()) {
+        await createNotification({
+          recipient: assigneeId,
+          sender: userId,
+          type: "COMMENT_ADDED",
+          title,
+          message,
+          link,
+        });
+      }
     }
 
     if (
       task.createdBy &&
       task.createdBy.toString() !== userId.toString() &&
-      (!task.assignedTo || task.assignedTo.toString() !== task.createdBy.toString())
+      !assigneesList.includes(task.createdBy.toString())
     ) {
       await createNotification({
         recipient: task.createdBy.toString(),
@@ -67,7 +70,7 @@ export const getTaskCommentsService = async (
   const comments = await CommentModel.find({
     task: taskId,
   })
-    .populate("user", "name email")
+    .populate("user", "username email")
     .sort({ createdAt: -1 });
 
   return comments;

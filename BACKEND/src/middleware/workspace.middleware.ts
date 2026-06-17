@@ -1,6 +1,7 @@
 // middleware/workspace.middleware.ts
 import { Request, Response, NextFunction } from "express";
 import Workspace from "../model/workspace.model";
+import Project from "../model/project.model";
 
 export const isWorkspaceAdmin = async (
   req: Request,
@@ -11,10 +12,28 @@ export const isWorkspaceAdmin = async (
   try {
 
     const user = (req as any).user;
+    let workspaceId = req.params.workspaceId;
 
-    const workspace = await Workspace.findById(
-      req.params.workspaceId
-    );
+    // Support routes like deleteProject where workspaceId is not in parameters
+    if (!workspaceId && req.params.projectId) {
+      const project = await Project.findById(req.params.projectId);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: "Project not found",
+        });
+      }
+      workspaceId = project.workspace.toString();
+    }
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        success: false,
+        message: "Workspace ID is required",
+      });
+    }
+
+    const workspace = await Workspace.findById(workspaceId);
 
     if (!workspace) {
       return res.status(404).json({

@@ -1,8 +1,7 @@
 import { Router } from "express"; // Use import instead of require
 import { body } from "express-validator";
 import { signup, login, profile, logout,updateUserProfile,forgetPass } from "../controllers/user.controller";
-// import auth from "../middleware/auth.middleware";
-const { userauth } = require("../middleware/auth.middleware");
+import { userauth } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -27,10 +26,11 @@ router.post("/new/register", [
       .withMessage("Password must be at least 3 characters long")
       .notEmpty(),
 
-    body("age")
-      .isInt({ min: 0 })
-      .withMessage("Age must be a positive integer")
-      .notEmpty(),
+    body("phone")
+      .isNumeric()
+      .withMessage("Phone must be a number")
+      .notEmpty()
+      .withMessage("Phone number is required"),
 
     body("gender")
       .isString()

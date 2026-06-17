@@ -16,6 +16,7 @@ exports.deleteWorkspace = exports.leaveWorkspace = exports.changeWorkspaceRole =
 const workspace_model_1 = __importDefault(require("../model/workspace.model"));
 const project_model_1 = __importDefault(require("../model/project.model"));
 const mongoose_1 = __importDefault(require("mongoose"));
+const notification_service_1 = require("./notification.service");
 // CREATE WORKSPACE
 const createWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name, description, owner, }) {
     const workspace = yield workspace_model_1.default.create({
@@ -47,7 +48,9 @@ exports.getWorkspaceById = getWorkspaceById;
 const getUserWorkspaces = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     const workspaces = yield workspace_model_1.default.find({
         "members.user": userId,
-    });
+    })
+        .populate("owner")
+        .populate("members.user");
     return workspaces;
 });
 exports.getUserWorkspaces = getUserWorkspaces;
@@ -68,7 +71,7 @@ const updateWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ wor
 });
 exports.updateWorkspace = updateWorkspace;
 // ADD MEMBER
-const addUserToWorkspace = (workspaceId, userId) => __awaiter(void 0, void 0, void 0, function* () {
+const addUserToWorkspace = (workspaceId, userId, inviterId) => __awaiter(void 0, void 0, void 0, function* () {
     const workspace = yield workspace_model_1.default.findById(workspaceId);
     if (!workspace) {
         throw new Error("Workspace not found");
@@ -82,6 +85,14 @@ const addUserToWorkspace = (workspaceId, userId) => __awaiter(void 0, void 0, vo
         role: "member",
     });
     yield workspace.save();
+    yield (0, notification_service_1.createNotification)({
+        recipient: userId,
+        sender: inviterId || workspace.owner.toString(),
+        type: "WORKSPACE_INVITE",
+        title: "Workspace Invitation",
+        message: `You have been added to the workspace: "${workspace.name}"`,
+        link: `/workspaces/${workspace._id}`,
+    });
     return workspace;
 });
 exports.addUserToWorkspace = addUserToWorkspace;
@@ -97,7 +108,7 @@ const removeUserFromWorkspace = (workspaceId, userId) => __awaiter(void 0, void 
         workspace: workspaceId,
     }, {
         $pull: {
-            members: { user: userId },
+            members: userId,
         },
     });
     return workspace;

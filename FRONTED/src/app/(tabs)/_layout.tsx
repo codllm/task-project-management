@@ -1,85 +1,86 @@
 import { Tabs } from "expo-router";
-import { View, Text } from "react-native";
-
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Home: "🏠",
-    Projects: "📁",
-    Tasks: "✅",
-    Notifications: "🔔",
-    Profile: "👤",
-  };
-
-  return (
-    <View className="items-center justify-center pt-2">
-      <Text style={{ fontSize: 20 }}>{icons[label] || "📌"}</Text>
-      <Text
-        className={`text-xs mt-1 ${
-          focused ? "text-[#6C63FF] font-bold" : "text-[#555468]"
-        }`}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
+import { useApp } from "../../context/AppContext";
+import React from "react";
+import { Feather } from "@expo/vector-icons";
 
 export default function TabsLayout() {
+  const { unreadCount, themeColor } = useApp();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: "#1C1B2E",
-          borderTopColor: "#252438",
-          borderTopWidth: 1,
-          height: 80,
-          paddingBottom: 16,
-          paddingTop: 4,
-        },
         tabBarShowLabel: false,
-        tabBarActiveTintColor: "#6C63FF",
-        tabBarInactiveTintColor: "#555468",
+        tabBarStyle: {
+          backgroundColor: "#0B0F19",
+          borderTopColor: "#22283A",
+          borderTopWidth: 1,
+          height: 65,
+        },
+        tabBarActiveTintColor: themeColor,
+        tabBarInactiveTintColor: "#64748B",
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label="Home" focused={focused} />
+          title: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="home" size={20} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="projects"
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label="Projects" focused={focused} />
+          title: "Projects",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="folder" size={20} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="tasks"
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label="Tasks" focused={focused} />
+          title: "Tasks",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="check-square" size={20} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="notifications"
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label="Notifications" focused={focused} />
+          title: "Alerts",
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: "#EF4444",
+            color: "white",
+            fontSize: 9,
+            height: 16,
+            minWidth: 16,
+            borderRadius: 8,
+            lineHeight: 14,
+            textAlign: "center",
+          },
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="bell" size={20} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label="Profile" focused={focused} />
+          title: "Profile",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="user" size={20} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="createWorkspace"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

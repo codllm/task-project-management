@@ -13,127 +13,98 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.logout = exports.forgetPass = exports.updateUserProfile = exports.profile = exports.login = exports.signup = void 0;
-const user_service_1 = require("../services/user.service");
+const express_validator_1 = require("express-validator");
+const user_service_1 = require("../services/user.service"); // Named import
 const user_model_1 = __importDefault(require("../model/user.model"));
 const signup = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { username: { firstname, lastname }, email, password, age, gender, usertype, phone, } = req.body;
+    const errors = (0, express_validator_1.validationResult)(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+    const { username: { firstname, lastname }, email, password, age, gender, usertype, phone } = req.body;
     try {
-        const newUser = yield (0, user_service_1.createUser)({
-            firstname,
-            lastname,
-            email,
-            password,
-            age,
-            gender,
-            usertype,
-            phone,
-        });
+        const newUser = yield (0, user_service_1.createUser)({ firstname, lastname, email, password, age, gender, usertype, phone });
         const token = newUser.generateToken();
-        // Set secure HTTP-only cookie
-        res.cookie("token", token, {
-            httpOnly: true,
-            maxAge: 24 * 60 * 60 * 1000, // 1 day
-            sameSite: "strict",
-        });
-        return res.status(201).json({
-            success: true,
-            user: newUser,
-            token,
-        });
+        console.log("New user created:", newUser); // Debugging log
+        return res.status(201).json({ success: true, user: newUser, token });
     }
     catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 exports.signup = signup;
 const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const errors = (0, express_validator_1.validationResult)(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const { email, password } = req.body;
-    try {
-        const user = yield user_model_1.default.findOne({ email });
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid credentials",
-            });
-        }
-        const passwordMatch = yield user.comparePassword(password);
-        if (!passwordMatch) {
-            return res.status(401).json({
-                success: false,
-                message: "Incorrect Password",
-            });
-        }
-        const token = user.generateToken();
-        // Set secure HTTP-only cookie
-        res.cookie("token", token, {
-            httpOnly: true,
-            maxAge: 24 * 60 * 60 * 1000, // 1 day
-            sameSite: "strict",
-        });
-        return res.status(200).json({
-            success: true,
-            user,
-            token,
+    const user = yield user_model_1.default.findOne({ email });
+    if (!user) {
+        return res.status(401).json({
+            message: "Invalid credentials"
         });
     }
-    catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+    const passwordMatch = yield user.comparePassword(password);
+    console.log("Password Match:", passwordMatch);
+    if (!passwordMatch) {
+        return res.status(401).json({ message: "Incorrect Password" });
     }
+    //match found, generate token now
+    const token = user.generateToken();
+    console.log("User logged in:", user); // Debugging
+    console.log("Generated login Token:", token); // Debugging
+    return res.status(200).json({ user, token });
 });
 exports.login = login;
 const profile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         return res.status(200).json({
-            success: true,
             user: req.user,
         });
     }
-    catch (error) {
+    catch (err) {
         return res.status(500).json({
-            success: false,
             message: "Server error",
         });
     }
 });
 exports.profile = profile;
 const updateUserProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const errors = (0, express_validator_1.validationResult)(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const { email, phone } = req.body;
     try {
         const updatedUser = yield (0, user_service_1.updateUser)({ email, phone });
         if (!updatedUser) {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return res.status(404).json({ message: "User not found" });
         }
-        return res.status(200).json({ success: true, user: updatedUser });
+        return res.status(200).json({ user: updatedUser });
     }
     catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 exports.updateUserProfile = updateUserProfile;
 const forgetPass = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const errors = (0, express_validator_1.validationResult)(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const { email, newPassword } = req.body;
-    try {
-        yield (0, user_service_1.forgetPassword)(email, newPassword);
-        return res.status(200).json({
-            success: true,
-            message: "Password reset successfully",
-        });
-    }
-    catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
+    // Implment password reset logic here (e.g., send reset email)
+    const userforget = yield (0, user_service_1.forgetPassword)(email, newPassword); // Example new password, replace with actual logic
+    return res.status(200).json({ message: `Password reset link sent to ${email}` });
 });
 exports.forgetPass = forgetPass;
 const logout = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        res.clearCookie("token");
-        return res.status(200).json({
-            success: true,
-            message: "Logged out successfully",
-        });
+    var _a;
+    const token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1]; // Extract token from header
+    if (!token) {
+        return res.status(400).json({ message: "Token is required for logout" });
     }
-    catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
+    console.log("Logout token:", token); // Debugging log
 });
 exports.logout = logout;

@@ -21,7 +21,7 @@ export interface ITask extends Document {
   priority: string;
   dueDate: Date;
   project: mongoose.Types.ObjectId;
-  assignedTo?: mongoose.Types.ObjectId;
+  assignedTo?: mongoose.Types.ObjectId[];
   createdBy: mongoose.Types.ObjectId;
 
   // Advanced task management fields
@@ -66,10 +66,10 @@ const taskSchema = new Schema<ITask>(
       ref: "Project",
       required: true,
     },
-    assignedTo: {
+    assignedTo: [{
       type: Schema.Types.ObjectId,
       ref: "User",
-    },
+    }],
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",

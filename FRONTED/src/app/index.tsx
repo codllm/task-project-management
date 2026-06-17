@@ -4,8 +4,8 @@ import { View, ActivityIndicator } from "react-native";
 // determines auth state and redirects. Show a branded splash.
 export default function IndexScreen() {
   return (
-    <View className="flex-1 bg-[#0F0E17] items-center justify-center">
-      <ActivityIndicator size="large" color="#6C63FF" />
+    <View className="flex-1 bg-dark-bg items-center justify-center" style={{ backgroundColor: "#0B0F19" }}>
+      <ActivityIndicator size="large" color="#C2F193" />
     </View>
   );
 }

@@ -14,6 +14,9 @@ exports.createProjectSchema = zod_1.z.object({
     deadline: zod_1.z
         .string()
         .optional(),
+    color: zod_1.z
+        .string()
+        .optional(),
 });
 exports.updateProjectSchema = zod_1.z.object({
     name: zod_1.z

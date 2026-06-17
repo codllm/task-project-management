@@ -25,7 +25,7 @@ exports.createTaskSchema = zod_1.z.object({
     project: zod_1.z
         .string(),
     assignedTo: zod_1.z
-        .string()
+        .union([zod_1.z.string(), zod_1.z.array(zod_1.z.string())])
         .optional(),
 });
 exports.updateTaskSchema = zod_1.z.object({
@@ -43,6 +43,9 @@ exports.updateTaskSchema = zod_1.z.object({
     dueDate: zod_1.z
         .string()
         .optional(),
+    assignedTo: zod_1.z
+        .union([zod_1.z.string(), zod_1.z.array(zod_1.z.string())])
+        .optional(),
 });
 exports.updateTaskStatusSchema = zod_1.z.object({
     status: zod_1.z.enum([
@@ -53,5 +56,5 @@ exports.updateTaskStatusSchema = zod_1.z.object({
 });
 exports.assignTaskSchema = zod_1.z.object({
     assignedTo: zod_1.z
-        .string(),
+        .union([zod_1.z.string(), zod_1.z.array(zod_1.z.string())]),
 });

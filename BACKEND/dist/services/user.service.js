@@ -42,7 +42,7 @@ const createUser = (userData) => __awaiter(void 0, void 0, void 0, function* () 
         gender,
         age,
         usertype,
-        phone: phone || 0, // Save phone number if provided
+        phone: 0, // Default value for phone, adjust as needed
     });
     // Hashing password using the custom instance method we wrote earlier!
     user.password = yield user.hashPassword(password);

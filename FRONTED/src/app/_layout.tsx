@@ -4,42 +4,38 @@ import { Stack, useRouter } from "expo-router";
 import { View, ActivityIndicator } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
-export default function RootLayout() {
-  const [checking, setChecking] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+import { AppProvider, useApp } from "../context/AppContext";
+
+function RootLayoutContent() {
+  const { token, loading, themeColor } = useApp();
   const router = useRouter();
 
   useEffect(() => {
-    (async () => {
-      try {
-        const token = await SecureStore.getItemAsync("token");
-        setIsLoggedIn(!!token);
-      } catch {
-        setIsLoggedIn(false);
-      } finally {
-        setChecking(false);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (checking) return;
-    if (isLoggedIn) {
+    if (loading) return;
+    if (token) {
       router.replace("/(tabs)/home");
     } else {
       router.replace("/(auth)/login");
     }
-  }, [checking, isLoggedIn]);
+  }, [loading, token]);
 
-  if (checking) {
+  if (loading) {
     return (
-      <View className="flex-1 bg-[#0F0E17] items-center justify-center">
-        <ActivityIndicator size="large" color="#6C63FF" />
+      <View className="flex-1 bg-dark-bg items-center justify-center" style={{ backgroundColor: "#0B0F19" }}>
+        <ActivityIndicator size="large" color={themeColor} />
       </View>
     );
   }
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AppProvider>
+      <RootLayoutContent />
+    </AppProvider>
   );
 }

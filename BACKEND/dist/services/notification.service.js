@@ -31,17 +31,18 @@ exports.createNotification = createNotification;
 /**
  * Fetch latest notifications for a specific user
  */
-const getUserNotifications = (userId_1, ...args_1) => __awaiter(void 0, [userId_1, ...args_1], void 0, function* (userId, limit = 20, page = 1) {
+const getUserNotifications = (userId_1, ...args_1) => __awaiter(void 0, [userId_1, ...args_1], void 0, function* (userId, limit = 20, page = 1, type) {
     const skip = (page - 1) * limit;
-    const notifications = yield notification_model_1.default.find({ recipient: userId })
+    const query = { recipient: userId };
+    if (type) {
+        query.type = type;
+    }
+    const notifications = yield notification_model_1.default.find(query)
         .populate("sender", "username email")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
-    const unreadCount = yield notification_model_1.default.countDocuments({
-        recipient: userId,
-        read: false,
-    });
+    const unreadCount = yield notification_model_1.default.countDocuments(Object.assign(Object.assign({}, query), { read: false }));
     return { notifications, unreadCount };
 });
 exports.getUserNotifications = getUserNotifications;

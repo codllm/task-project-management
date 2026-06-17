@@ -61,7 +61,9 @@ export const getUserWorkspaces = async (
 
   const workspaces = await Workspace.find({
     "members.user": userId,
-  });
+  })
+    .populate("owner")
+    .populate("members.user");
 
   return workspaces;
 };

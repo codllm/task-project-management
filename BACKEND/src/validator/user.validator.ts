@@ -24,7 +24,8 @@ export const registerUserSchema = z.object({
 
   age: z
     .number()
-    .min(1),
+    .min(1)
+    .optional(),
 
   gender: z.enum([
     "male",
@@ -40,7 +41,7 @@ export const registerUserSchema = z.object({
 
   phone: z
     .string()
-    .optional(),
+    .min(3),
 
 });
 

@@ -30,7 +30,7 @@ export const createTaskSchema = z.object({
     .string(),
 
   assignedTo: z
-    .string()
+    .union([z.string(), z.array(z.string())])
     .optional(),
 
 });
@@ -54,6 +54,9 @@ export const updateTaskSchema = z.object({
   dueDate: z
     .string()
     .optional(),
+  assignedTo: z
+    .union([z.string(), z.array(z.string())])
+    .optional(),
 
 });
 
@@ -70,6 +73,6 @@ export const updateTaskStatusSchema = z.object({
 export const assignTaskSchema = z.object({
 
   assignedTo: z
-    .string(),
+    .union([z.string(), z.array(z.string())]),
 
 });

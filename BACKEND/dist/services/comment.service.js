@@ -33,23 +33,23 @@ const createCommentService = (content, taskId, userId) => __awaiter(void 0, void
         const title = "New Comment on Task";
         const message = `A comment was added to task "${task.title}"`;
         const link = `/projects/${task.project}/tasks/${task._id}`;
-        // Emit Socket.io real-time update to project room
         (0, socket_1.emitToProject)(task.project.toString(), "comment:created", populatedComment);
-        // Notify assignee if not the commenter
-        if (task.assignedTo && task.assignedTo.toString() !== userId.toString()) {
-            yield (0, notification_service_1.createNotification)({
-                recipient: task.assignedTo.toString(),
-                sender: userId,
-                type: "COMMENT_ADDED",
-                title,
-                message,
-                link,
-            });
+        const assigneesList = task.assignedTo ? task.assignedTo.map(a => a.toString()) : [];
+        for (const assigneeId of assigneesList) {
+            if (assigneeId !== userId.toString()) {
+                yield (0, notification_service_1.createNotification)({
+                    recipient: assigneeId,
+                    sender: userId,
+                    type: "COMMENT_ADDED",
+                    title,
+                    message,
+                    link,
+                });
+            }
         }
-        // Notify creator if not the commenter and not the assignee
         if (task.createdBy &&
             task.createdBy.toString() !== userId.toString() &&
-            (!task.assignedTo || task.assignedTo.toString() !== task.createdBy.toString())) {
+            !assigneesList.includes(task.createdBy.toString())) {
             yield (0, notification_service_1.createNotification)({
                 recipient: task.createdBy.toString(),
                 sender: userId,
@@ -64,11 +64,12 @@ const createCommentService = (content, taskId, userId) => __awaiter(void 0, void
 });
 exports.createCommentService = createCommentService;
 const getTaskCommentsService = (taskId) => __awaiter(void 0, void 0, void 0, function* () {
-    return yield comment_model_1.default.find({
+    const comments = yield comment_model_1.default.find({
         task: taskId,
     })
         .populate("user", "username email")
         .sort({ createdAt: -1 });
+    return comments;
 });
 exports.getTaskCommentsService = getTaskCommentsService;
 const deleteCommentService = (commentId) => __awaiter(void 0, void 0, void 0, function* () {
@@ -77,7 +78,6 @@ const deleteCommentService = (commentId) => __awaiter(void 0, void 0, void 0, fu
         throw new Error("Comment not found");
     }
     yield comment_model_1.default.findByIdAndDelete(commentId);
-    // Emit a real-time event to the project board
     if (comment.task) {
         (0, socket_1.emitToProject)(comment.task.project.toString(), "comment:deleted", { commentId });
     }

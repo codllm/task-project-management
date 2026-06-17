@@ -15,6 +15,7 @@ interface CreateProjectPayload {
   workspace: string;
   createdBy: string;
   deadline?: Date;
+  color?: string;
 }
 
 export const createProject = async ({
@@ -23,6 +24,7 @@ export const createProject = async ({
   workspace,
   createdBy,
   deadline,
+  color,
 }: CreateProjectPayload) => {
 
   const workspaceExists = await Workspace.findById(
@@ -39,6 +41,7 @@ export const createProject = async ({
     workspace,
     createdBy,
     deadline,
+    color,
 
     members: [
       {
@@ -49,12 +52,16 @@ export const createProject = async ({
   });
 
   const otherMembers = workspaceExists.members.filter(
-    (m) => m.user.toString() !== createdBy.toString()
+    (m) => {
+      const memberUserId = (m && typeof m === "object" && m.user) ? m.user.toString() : (m ? m.toString() : "");
+      return memberUserId !== createdBy.toString() && memberUserId !== "";
+    }
   );
 
   for (const member of otherMembers) {
+    const memberUserId = (member && typeof member === "object" && member.user) ? member.user.toString() : member.toString();
     await createNotification({
-      recipient: member.user.toString(),
+      recipient: memberUserId,
       sender: createdBy.toString(),
       type: "PROJECT_ADDED",
       title: "New Project Added",
@@ -94,7 +101,7 @@ export const getWorkspaceProjects = async (
 
   const projects = await Project.find({
     workspace: workspaceId,
-  });
+  }).populate("members.user");
 
   return projects;
 };
@@ -228,7 +235,12 @@ export const addMemberToProject = async (
 
   await project.save();
 
-  return project;
+  const populatedProject = await Project.findById(project._id)
+    .populate("workspace")
+    .populate("members.user")
+    .populate("createdBy");
+
+  return populatedProject;
 };
 
 
@@ -254,7 +266,12 @@ export const removeMemberFromProject = async (
 
   await project.save();
 
-  return project;
+  const populatedProject = await Project.findById(project._id)
+    .populate("workspace")
+    .populate("members.user")
+    .populate("createdBy");
+
+  return populatedProject;
 };
 
 
@@ -287,7 +304,12 @@ export const changeProjectRole = async (
 
   await project.save();
 
-  return project;
+  const populatedProject = await Project.findById(project._id)
+    .populate("workspace")
+    .populate("members.user")
+    .populate("createdBy");
+
+  return populatedProject;
 };
 
 

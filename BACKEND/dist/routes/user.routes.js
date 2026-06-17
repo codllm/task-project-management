@@ -1,21 +1,52 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
+const express_1 = require("express"); // Use import instead of require
+const express_validator_1 = require("express-validator");
 const user_controller_1 = require("../controllers/user.controller");
-const auth_middleware_1 = require("../middleware/auth.middleware");
-const validate_middleware_1 = require("../middleware/validate.middleware");
-const user_validator_1 = require("../validator/user.validator");
+// import auth from "../middleware/auth.middleware";
+const { userauth } = require("../middleware/auth.middleware");
 const router = (0, express_1.Router)();
-// Register a new user
-router.post("/new/register", (0, validate_middleware_1.validate)(user_validator_1.registerUserSchema), user_controller_1.signup);
-// User login
-router.post("/login", (0, validate_middleware_1.validate)(user_validator_1.loginUserSchema), user_controller_1.login);
-// Update user details
-router.post("/update", auth_middleware_1.userauth, (0, validate_middleware_1.validate)(user_validator_1.updateUserSchema), user_controller_1.updateUserProfile);
-// Forget/reset password
-router.post("/forget-password", (0, validate_middleware_1.validate)(user_validator_1.forgetPasswordSchema), user_controller_1.forgetPass);
-// Get profile
-router.get("/profile", auth_middleware_1.userauth, user_controller_1.profile);
-// Logout user
-router.post("/logout", auth_middleware_1.userauth, user_controller_1.logout);
+router.post("/new/register", [
+    (0, express_validator_1.body)("username.firstname")
+        .isString()
+        .withMessage("First name must be a string")
+        .notEmpty(),
+    (0, express_validator_1.body)("username.lastname")
+        .isString()
+        .withMessage("Last name must be a string")
+        .notEmpty(),
+    (0, express_validator_1.body)("email")
+        .isEmail()
+        .withMessage("Invalid email format")
+        .notEmpty(),
+    (0, express_validator_1.body)("password")
+        .isLength({ min: 3 })
+        .withMessage("Password must be at least 3 characters long")
+        .notEmpty(),
+    (0, express_validator_1.body)("age")
+        .isInt({ min: 0 })
+        .withMessage("Age must be a positive integer")
+        .notEmpty(),
+    (0, express_validator_1.body)("gender")
+        .isString()
+        .withMessage("Gender is required")
+        .notEmpty(),
+    (0, express_validator_1.body)("usertype")
+        .isIn(["individual", "team", "admin"])
+        .withMessage("Invalid user type")
+        .notEmpty()
+], user_controller_1.signup);
+router.post("/login", [
+    (0, express_validator_1.body)("email").isEmail().withMessage("Invalid email format").notEmpty(),
+    (0, express_validator_1.body)("password").isLength({ min: 3 }).withMessage("Password must be at least 3 characters long").notEmpty(),
+], user_controller_1.login);
+router.post("/update", [
+    (0, express_validator_1.body)("email").isEmail().withMessage("Invalid email format").notEmpty(),
+    (0, express_validator_1.body)("phone").isNumeric().withMessage("Phone must be a number").notEmpty(),
+], userauth, user_controller_1.updateUserProfile);
+router.get('/forget-password', [
+    (0, express_validator_1.body)("email").isEmail().withMessage("Invalid email format").notEmpty(),
+], user_controller_1.forgetPass);
+router.get("/profile", userauth, user_controller_1.profile);
+router.post("/logout", userauth, user_controller_1.logout);
 exports.default = router;

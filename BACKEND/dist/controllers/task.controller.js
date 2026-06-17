@@ -23,7 +23,7 @@ const createTaskController = (req, res) => __awaiter(void 0, void 0, void 0, fun
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to create task",
+            message: "Failed to create task",
         });
     }
 });
@@ -31,7 +31,8 @@ exports.createTaskController = createTaskController;
 const getProjectTasksController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const projectId = req.params.projectId;
-        const tasks = yield (0, task_service_1.getProjectTasksService)(projectId);
+        const userId = req.user._id;
+        const tasks = yield (0, task_service_1.getProjectTasksService)(projectId, userId);
         return res.status(200).json({
             success: true,
             tasks,
@@ -40,7 +41,7 @@ const getProjectTasksController = (req, res) => __awaiter(void 0, void 0, void 0
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to fetch tasks",
+            message: "Failed to fetch tasks",
         });
     }
 });
@@ -48,13 +49,8 @@ exports.getProjectTasksController = getProjectTasksController;
 const getSingleTaskController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const taskId = req.params.taskId;
-        const task = yield (0, task_service_1.getSingleTaskService)(taskId);
-        if (!task) {
-            return res.status(404).json({
-                success: false,
-                message: "Task not found",
-            });
-        }
+        const userId = req.user._id;
+        const task = yield (0, task_service_1.getSingleTaskService)(taskId, userId);
         return res.status(200).json({
             success: true,
             task,
@@ -63,7 +59,7 @@ const getSingleTaskController = (req, res) => __awaiter(void 0, void 0, void 0, 
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to fetch task",
+            message: "Failed to fetch task",
         });
     }
 });
@@ -72,7 +68,7 @@ const updateTaskController = (req, res) => __awaiter(void 0, void 0, void 0, fun
     try {
         const { taskId } = req.params;
         const userId = req.user._id;
-        const updatedTask = yield (0, task_service_1.updateTaskService)(taskId, req.body, userId.toString());
+        const updatedTask = yield (0, task_service_1.updateTaskService)(taskId, req.body, userId);
         return res.status(200).json({
             success: true,
             updatedTask,
@@ -81,7 +77,7 @@ const updateTaskController = (req, res) => __awaiter(void 0, void 0, void 0, fun
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to update task",
+            message: "Failed to update task",
         });
     }
 });
@@ -92,13 +88,13 @@ const deleteTaskController = (req, res) => __awaiter(void 0, void 0, void 0, fun
         yield (0, task_service_1.deleteTaskService)(taskId);
         return res.status(200).json({
             success: true,
-            message: "Task deleted successfully",
+            message: "Task deleted",
         });
     }
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to delete task",
+            message: "Failed to delete task",
         });
     }
 });

@@ -21,6 +21,8 @@ export interface IProject extends Document {
   status: "ACTIVE" | "COMPLETED" | "ARCHIVED";
 
   deadline?: Date;
+
+  color?: string;
 }
 
 const projectSchema = new Schema<IProject>(
@@ -33,6 +35,11 @@ const projectSchema = new Schema<IProject>(
 
     description: {
       type: String,
+    },
+
+    color: {
+      type: String,
+      default: "#6C63FF",
     },
 
     workspace: {

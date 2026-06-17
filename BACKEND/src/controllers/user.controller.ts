@@ -14,7 +14,6 @@ export const signup = async (req: Request, res: Response) => {
     username: { firstname, lastname },
     email,
     password,
-    age,
     gender,
     usertype,
     phone
@@ -22,7 +21,7 @@ export const signup = async (req: Request, res: Response) => {
 
   try {
 
-    const newUser = await createUser({ firstname, lastname, email, password, age, gender,usertype,phone });
+    const newUser = await createUser({ firstname, lastname, email, password, gender,usertype,phone });
     
     const token = newUser.generateToken();
 
@@ -54,11 +53,8 @@ console.log("Password Match:", passwordMatch);
     return res.status(401).json({ message: "Incorrect Password" });
   }
   //match found, generate token now
-
   const token = user.generateToken();
-  console.log("User logged in:", user); // Debugging
-  console.log("Generated login Token:", token); // Debugging
-  return res.status(200).json({ user, token });
+  return res.status(200).json({ success: true, user, token });
 };
 
 export const profile = async (req:Request, res:Response) => {
