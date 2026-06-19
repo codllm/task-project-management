@@ -31,6 +31,39 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+// ─── Theme constants (all #15171C based) ─────────────────────────────────────
+const T = {
+  bg:          "#15171C",
+  card:        "#1D2027",
+  cardBorder:  "#21242C",
+  input:       "#21242C",
+  inputBorder: "#2A2D35",
+  divider:     "#21242C",
+  accent:      "#5865F2",
+  accentPress: "#4752C4",
+  onAccent:    "#FFFFFF",
+  textPrimary:   "#E2E4EA",
+  textSecondary: "#6B7280",
+  textMuted:     "#3D4049",
+  tagBg:   "#21242C",
+  tagText: "#6B7280",
+  // stat tints
+  greenBg:     "rgba(43,174,118,0.08)",
+  greenBorder: "rgba(43,174,118,0.16)",
+  greenText:   "#2BAE76",
+  purpleBg:    "rgba(88,101,242,0.08)",
+  purpleBorder:"rgba(88,101,242,0.16)",
+  purpleText:  "#5865F2",
+  redBg:       "rgba(240,71,71,0.08)",
+  redBorder:   "rgba(240,71,71,0.16)",
+  redText:     "#F04747",
+  amberText:   "#FAA61A",
+  dangerBg:    "rgba(240,71,71,0.08)",
+  dangerBorder:"rgba(240,71,71,0.16)",
+  danger:      "#F04747",
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function HomeScreen() {
   const router = useRouter();
   const {
@@ -54,36 +87,31 @@ export default function HomeScreen() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  // Pinned items states
   const [pinnedProjects, setPinnedProjects] = useState<any[]>([]);
   const [pinnedTasks, setPinnedTasks] = useState<any[]>([]);
   const [loadingPinned, setLoadingPinned] = useState(false);
 
-  // Activity Log states
   const [activities, setActivities] = useState<any[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
-  // Modal / Dropdown states
   const [workspaceMenuVisible, setWorkspaceMenuVisible] = useState(false);
   const [manageModalVisible, setManageModalVisible] = useState(false);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<"stats" | "members">("stats");
 
-  // Global Search states
   const [globalQuery, setGlobalQuery] = useState("");
   const [globalResults, setGlobalResults] = useState<any>(null);
   const [searchingGlobal, setSearchingGlobal] = useState(false);
 
-  // Invite states
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchUserResult[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [invitingUserId, setInvitingUserId] = useState<string | null>(null);
 
-  // Profile Modal states
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<any | null>(null);
 
+  // ─── All original helper functions unchanged ────────────────────────────────
   const getInitials = (userObj: any): string => {
     if (!userObj?.username) return "?";
     if (typeof userObj.username === "object" && userObj.username.firstname && userObj.username.lastname) {
@@ -102,19 +130,18 @@ export default function HomeScreen() {
 
   const getAvatarColors = (username?: string) => {
     const colors = [
-      { bg: "#1E1C3A", text: "#C5C2F5" }, // Purple
-      { bg: "#0D1A2A", text: "#85B7EB" }, // Blue
-      { bg: "rgba(93,202,165,0.12)", text: "#5DCAA5" }, // Green
-      { bg: "rgba(239,159,39,0.12)", text: "#EF9F27" }, // Amber
-      { bg: "rgba(226,75,74,0.12)", text: "#E24B4A" }, // Red
+      { bg: "#1E1C3A", text: "#C5C2F5" },
+      { bg: "#0D1A2A", text: "#85B7EB" },
+      { bg: "rgba(93,202,165,0.12)", text: "#5DCAA5" },
+      { bg: "rgba(239,159,39,0.12)", text: "#EF9F27" },
+      { bg: "rgba(226,75,74,0.12)", text: "#E24B4A" },
     ];
     if (!username) return colors[0];
     let hash = 0;
     for (let i = 0; i < username.length; i++) {
       hash = username.charCodeAt(i) + ((hash << 5) - hash);
     }
-    const index = Math.abs(hash) % colors.length;
-    return colors[index];
+    return colors[Math.abs(hash) % colors.length];
   };
 
   const handleOpenUserProfile = (userObj: any) => {
@@ -129,7 +156,6 @@ export default function HomeScreen() {
     })
   );
 
-  // Fetch and aggregate stats
   useEffect(() => {
     if (activeWorkspace) {
       loadWorkspaceAnalytics();
@@ -140,39 +166,27 @@ export default function HomeScreen() {
   }, [activeWorkspace, projects]);
 
   useEffect(() => {
-    if (activeWorkspace) {
-      loadActivities();
-    } else {
-      setActivities([]);
-    }
+    if (activeWorkspace) loadActivities();
+    else setActivities([]);
   }, [activeWorkspace]);
 
   useEffect(() => {
-    if (user) {
-      loadPinnedItems();
-    }
+    if (user) loadPinnedItems();
   }, [activeWorkspace, projects, user]);
 
-  // Global search hooks
   useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      if (globalQuery.trim().length >= 2) {
-        performGlobalSearch();
-      } else {
-        setGlobalResults(null);
-      }
+    const d = setTimeout(() => {
+      if (globalQuery.trim().length >= 2) performGlobalSearch();
+      else setGlobalResults(null);
     }, 400);
-
-    return () => clearTimeout(delayDebounce);
+    return () => clearTimeout(d);
   }, [globalQuery]);
 
   const performGlobalSearch = async () => {
     setSearchingGlobal(true);
     try {
       const res = await globalSearch(globalQuery);
-      if (res.success) {
-        setGlobalResults(res.results);
-      }
+      if (res.success) setGlobalResults(res.results);
     } catch (err) {
       console.error("Global search error:", err);
     } finally {
@@ -199,7 +213,9 @@ export default function HomeScreen() {
     setSearchModalVisible(false);
     setGlobalQuery("");
     setGlobalResults(null);
-    const proj = projects.find(p => p._id === (typeof task.project === "object" ? task.project._id : task.project));
+    const proj = projects.find(
+      (p) => p._id === (typeof task.project === "object" ? task.project._id : task.project)
+    );
     if (proj) {
       selectProject(proj);
       router.push("/(tabs)/tasks");
@@ -211,9 +227,7 @@ export default function HomeScreen() {
     setLoadingActivities(true);
     try {
       const res = await getWorkspaceActivities(activeWorkspace._id);
-      if (res.success) {
-        setActivities(res.activities);
-      }
+      if (res.success) setActivities(res.activities);
     } catch (err) {
       console.error("Error loading activities:", err);
     } finally {
@@ -223,18 +237,12 @@ export default function HomeScreen() {
 
   const getActivityIcon = (action: string): any => {
     switch (action) {
-      case "task_created":
-        return "add-circle-outline";
-      case "task_updated":
-        return "create-outline";
-      case "task_status_changed":
-        return "swap-horizontal-outline";
-      case "task_deleted":
-        return "trash-outline";
-      case "comment_added":
-        return "chatbubble-ellipses-outline";
-      default:
-        return "git-commit-outline";
+      case "task_created":        return "add-circle-outline";
+      case "task_updated":        return "create-outline";
+      case "task_status_changed": return "swap-horizontal-outline";
+      case "task_deleted":        return "trash-outline";
+      case "comment_added":       return "chatbubble-ellipses-outline";
+      default:                    return "git-commit-outline";
     }
   };
 
@@ -246,8 +254,8 @@ export default function HomeScreen() {
       if (res.success) {
         setAnalytics(res.analytics);
         setStats({
-          total: res.analytics.summary.total,
-          completed: res.analytics.summary.completed,
+          total:      res.analytics.summary.total,
+          completed:  res.analytics.summary.completed,
           inProgress: res.analytics.summary.inProgress,
         });
       }
@@ -296,12 +304,9 @@ export default function HomeScreen() {
           name: asset.fileName || `logo_${Date.now()}.jpg`,
           type: "image/jpeg",
         } as any);
-
         const uploadRes = await uploadFile(formData);
         if (uploadRes.success) {
-          const updateRes = await updateWorkspace(activeWorkspace._id, {
-            logoUrl: uploadRes.url,
-          });
+          const updateRes = await updateWorkspace(activeWorkspace._id, { logoUrl: uploadRes.url });
           if (updateRes.success) {
             Alert.alert("Success", "Logo updated successfully!");
             await refreshWorkspaces();
@@ -320,17 +325,12 @@ export default function HomeScreen() {
     }
   };
 
-  // Search users for invite
   useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      if (searchQuery.trim().length >= 2) {
-        performUserSearch();
-      } else {
-        setSearchResults([]);
-      }
+    const d = setTimeout(() => {
+      if (searchQuery.trim().length >= 2) performUserSearch();
+      else setSearchResults([]);
     }, 400);
-
-    return () => clearTimeout(delayDebounce);
+    return () => clearTimeout(d);
   }, [searchQuery]);
 
   const performUserSearch = async () => {
@@ -338,15 +338,12 @@ export default function HomeScreen() {
     try {
       const res = await searchUsers(searchQuery);
       if (res.success) {
-        // Filter out users who are already members
         const currentMemberIds = activeWorkspace?.members.map((m: any) =>
           typeof m.user === "object" ? m.user._id : m.user
         ) || [];
-        
-        const filtered = res.users.filter(
-          (u) => u._id !== user?._id && !currentMemberIds.includes(u._id)
+        setSearchResults(
+          res.users.filter((u) => u._id !== user?._id && !currentMemberIds.includes(u._id))
         );
-        setSearchResults(filtered);
       }
     } catch (err) {
       console.error("User search error:", err);
@@ -357,33 +354,28 @@ export default function HomeScreen() {
 
   const handleInviteUser = async (targetUserId: string) => {
     if (!activeWorkspace) return;
-
-    Alert.alert(
-      "Add Workspace Member",
-      "Are you sure you want to add this user to the workspace?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Add Member",
-          onPress: async () => {
-            setInvitingUserId(targetUserId);
-            try {
-              const res = await addMemberToWorkspace(activeWorkspace._id, targetUserId);
-              if (res.success) {
-                Alert.alert("Success", "User added to workspace successfully!");
-                setSearchQuery("");
-                setSearchResults([]);
-                await refreshWorkspaces();
-              }
-            } catch (err: any) {
-              Alert.alert("Error", err?.response?.data?.message || "Failed to add member.");
-            } finally {
-              setInvitingUserId(null);
+    Alert.alert("Add Workspace Member", "Are you sure you want to add this user to the workspace?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Add Member",
+        onPress: async () => {
+          setInvitingUserId(targetUserId);
+          try {
+            const res = await addMemberToWorkspace(activeWorkspace._id, targetUserId);
+            if (res.success) {
+              Alert.alert("Success", "User added to workspace successfully!");
+              setSearchQuery("");
+              setSearchResults([]);
+              await refreshWorkspaces();
             }
+          } catch (err: any) {
+            Alert.alert("Error", err?.response?.data?.message || "Failed to add member.");
+          } finally {
+            setInvitingUserId(null);
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
   };
 
   const handleRemoveMember = async (targetUserId: string) => {
@@ -410,29 +402,11 @@ export default function HomeScreen() {
 
   const handleChangeRole = async (targetUserId: string, currentRole: string) => {
     if (!activeWorkspace) return;
-
-    Alert.alert(
-      "Change Member Role",
-      "Select the new workspace role for this member:",
-      [
-        {
-          text: "Admin",
-          onPress: async () => {
-            await updateWorkspaceMemberRole(targetUserId, "admin");
-          }
-        },
-        {
-          text: "Member",
-          onPress: async () => {
-            await updateWorkspaceMemberRole(targetUserId, "member");
-          }
-        },
-        {
-          text: "Cancel",
-          style: "cancel"
-        }
-      ]
-    );
+    Alert.alert("Change Member Role", "Select the new workspace role for this member:", [
+      { text: "Admin",  onPress: async () => await updateWorkspaceMemberRole(targetUserId, "admin") },
+      { text: "Member", onPress: async () => await updateWorkspaceMemberRole(targetUserId, "member") },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const updateWorkspaceMemberRole = async (targetUserId: string, role: "admin" | "member") => {
@@ -498,291 +472,173 @@ export default function HomeScreen() {
     );
   };
 
-  // Helper to extract workspace owner ID regardless of whether populated
   const getWorkspaceOwnerId = (ws: any) => {
     if (!ws) return null;
     const owner = ws.owner;
     return typeof owner === "object" && owner !== null ? owner._id : owner;
   };
 
-  // Determine permissions
-  const isOwner = getWorkspaceOwnerId(activeWorkspace) === user?._id;
-  const isAdmin = activeWorkspace?.members.some(
+  const isOwner  = getWorkspaceOwnerId(activeWorkspace) === user?._id;
+  const isAdmin  = activeWorkspace?.members.some(
     (m: any) => (typeof m.user === "object" ? m.user._id : m.user) === user?._id && m.role === "admin"
   );
   const canManage = isOwner || isAdmin;
 
+  // ─── Empty workspace state ──────────────────────────────────────────────────
   if (workspaces.length === 0) {
     return (
-      <SafeAreaView
-        className="flex-1 justify-center items-center px-6"
-        style={{ backgroundColor: "#3A76E1" }}
-      >
-        {/* Floating sticker icons for a playful feel */}
-        <View
-          style={{
-            position: "absolute",
-            top: 90,
-            left: 28,
-            width: 46,
-            height: 46,
-            borderRadius: 13,
-            backgroundColor: "#5865D8",
-            transform: [{ rotate: "-12deg" }],
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="checkmark-done-outline" size={20} color="#A99BE8" />
+      <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24, backgroundColor: T.bg }}>
+        <View style={{ position: "absolute", top: 90, left: 28, width: 46, height: 46, borderRadius: 13, backgroundColor: T.card, transform: [{ rotate: "-12deg" }], alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="checkmark-done-outline" size={20} color={T.accent} />
         </View>
-
-        <View
-          style={{
-            position: "absolute",
-            top: 150,
-            right: 24,
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            backgroundColor: "#5865D8",
-            transform: [{ rotate: "10deg" }],
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#7C62E0",
-            shadowOpacity: 0.3,
-          }}
-        >
-          <Ionicons name="chatbubble-outline" size={18} color="#C9BFF0" />
+        <View style={{ position: "absolute", top: 150, right: 24, width: 42, height: 42, borderRadius: 12, backgroundColor: T.card, transform: [{ rotate: "10deg" }], alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="chatbubble-outline" size={18} color={T.textSecondary} />
         </View>
-
-        <View
-          style={{
-            position: "absolute",
-            bottom: 200,
-            left: 22,
-            width: 38,
-            height: 38,
-            borderRadius: 11,
-            backgroundColor: "#5865D8",
-            transform: [{ rotate: "8deg" }],
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#7C62E0",
-            shadowOpacity: 0.3,
-          }}
-        >
-          <Ionicons name="flag-outline" size={17} color="#E093C0" />
+        <View style={{ position: "absolute", bottom: 200, left: 22, width: 38, height: 38, borderRadius: 11, backgroundColor: T.card, transform: [{ rotate: "8deg" }], alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="flag-outline" size={17} color={T.amberText} />
         </View>
-
-        {/* Rocket badge */}
-        <View
-          style={{
-            width: 96,
-            height: 96,
-            borderRadius: 30,
-            backgroundColor: "#5865D8",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 26,
-            shadowColor: "#7C62E0",
-            shadowOpacity: 0.3,
-            shadowRadius: 22,
-            shadowOffset: { width: 0, height: 12 },
-            elevation: 8,
-          }}
-        >
-          <Ionicons name="rocket-outline" size={42} color="#E4DDFA" />
+        <View style={{ width: 88, height: 88, borderRadius: 26, backgroundColor: T.card, alignItems: "center", justifyContent: "center", marginBottom: 24, borderWidth: 0.5, borderColor: T.cardBorder }}>
+          <Ionicons name="rocket-outline" size={40} color={T.accent} />
         </View>
-
-        <Text className="text-white text-2xl font-bold mt-1 text-center">
-          Let's build your space
-        </Text>
-        <Text
-          className="text-white text-base text-center mt-3 leading-6"
-          style={{ maxWidth: 260 }}
-        >
+        <Text style={{ color: T.textPrimary, fontSize: 22, fontWeight: "600", textAlign: "center" }}>Let's build your space</Text>
+        <Text style={{ color: T.textSecondary, fontSize: 14, textAlign: "center", marginTop: 10, lineHeight: 22, maxWidth: 260 }}>
           Spin up a workspace and bring your whole team along for the ride.
         </Text>
-
         <TouchableOpacity
-          className="px-8 py-4 rounded-2xl mt-8 flex-row items-center"
-          style={{
-            backgroundColor: themeColor,
-            shadowColor: themeColor,
-            shadowOpacity: 0.4,
-            shadowRadius: 18,
-            shadowOffset: { width: 0, height: 8 },
-            elevation: 6,
-          }}
-          activeOpacity={0.85}
           onPress={() => router.push("/(tabs)/createWorkspace")}
+          activeOpacity={0.85}
+          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16, marginTop: 28, backgroundColor: T.accent }}
         >
-          <Ionicons name="sparkles" size={17} color="#fffff" style={{ marginRight: 8 }} />
-          <Text className="text-[#0C101B] font-bold text-base">Create Workspace</Text>
+          <Ionicons name="sparkles" size={16} color={T.onAccent} style={{ marginRight: 8 }} />
+          <Text style={{ color: T.onAccent, fontWeight: "600", fontSize: 15 }}>Create Workspace</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
-return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: C.bg }}>
-      {/* Upper header with custom workspace dropdown */}
-      <View className="flex-row justify-between items-center px-5 py-4 border-b" style={{ borderBottomColor: C.divider }}>
+  // ─── Main render ────────────────────────────────────────────────────────────
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }}>
+
+      {/* ── Header ── */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: T.divider }}>
         <TouchableOpacity
           onPress={() => setWorkspaceMenuVisible(true)}
-          className="flex-row items-center rounded-xl px-4 py-2.5 border"
-          style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+          style={{ flexDirection: "row", alignItems: "center", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9 }}
         >
           {activeWorkspace?.logoUrl ? (
-            <Image 
-              source={{ uri: activeWorkspace.logoUrl }} 
-              style={{ width: 20, height: 20, borderRadius: 4, marginRight: 8 }} 
-            />
+            <Image source={{ uri: activeWorkspace.logoUrl }} style={{ width: 18, height: 18, borderRadius: 4, marginRight: 8 }} />
           ) : (
-            <Ionicons name="briefcase-outline" size={16} color={themeColor} style={{ marginRight: 8 }} />
+            <Ionicons name="briefcase-outline" size={15} color={T.accent} style={{ marginRight: 8 }} />
           )}
-          <Text className="font-semibold text-base mr-2" style={{ color: C.textPrimary }}>
+          <Text style={{ color: T.textPrimary, fontWeight: "500", fontSize: 14, marginRight: 6 }} numberOfLines={1}>
             {activeWorkspace?.name || "Select Workspace"}
           </Text>
-          <Ionicons name="chevron-down" size={14} color={themeColor} />
+          <Ionicons name="chevron-down" size={13} color={T.accent} />
         </TouchableOpacity>
 
-        <View className="flex-row gap-2">
+        <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity
             onPress={() => setSearchModalVisible(true)}
-            className="p-2.5 rounded-xl border"
-            style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+            style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, alignItems: "center", justifyContent: "center" }}
           >
-            <Ionicons name="search-outline" size={18} color={C.textSecondary} />
+            <Ionicons name="search-outline" size={17} color={T.textSecondary} />
           </TouchableOpacity>
-
           <TouchableOpacity
             onPress={() => setManageModalVisible(true)}
-            className="p-2.5 rounded-xl border"
-            style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+            style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, alignItems: "center", justifyContent: "center" }}
           >
-            <Ionicons name="settings-outline" size={18} color={C.textSecondary} />
+            <Ionicons name="settings-outline" size={17} color={T.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-5 pt-4" style={{ backgroundColor: C.bg }}>
-        {/* Active Tab Toggles */}
-        <View className="flex-row rounded-xl p-1 mb-6 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-          <TouchableOpacity
-            onPress={() => setActiveTab("stats")}
-            className="flex-1 py-3 rounded-lg items-center flex-row justify-center"
-            style={{ backgroundColor: activeTab === "stats" ? themeColor : "transparent" }}
-          >
-            <Ionicons
-              name="stats-chart-outline"
-              size={14}
-              color={activeTab === "stats" ? C.onAccent : C.textSecondary}
-              style={{ marginRight: 6 }}
-            />
-            <Text
-              className="font-semibold text-sm"
-              style={{ color: activeTab === "stats" ? C.onAccent : C.textSecondary }}
-            >
-              Overview
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab("members")}
-            className="flex-1 py-3 rounded-lg items-center flex-row justify-center"
-            style={{ backgroundColor: activeTab === "members" ? themeColor : "transparent" }}
-          >
-            <Ionicons
-              name="people-outline"
-              size={14}
-              color={activeTab === "members" ? C.onAccent : C.textSecondary}
-              style={{ marginRight: 6 }}
-            />
-            <Text
-              className="font-semibold text-sm"
-              style={{ color: activeTab === "members" ? C.onAccent : C.textSecondary }}
-            >
-              Members
-            </Text>
-          </TouchableOpacity>
+      <ScrollView style={{ flex: 1, backgroundColor: T.bg }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16 }}>
+
+        {/* ── Tab Toggle: Overview / Members ── */}
+        <View style={{ flexDirection: "row", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 12, padding: 4, marginBottom: 20 }}>
+          {(["stats", "members"] as const).map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setActiveTab(tab)}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 9, borderRadius: 9, backgroundColor: isActive ? T.accent : "transparent", gap: 6 }}
+              >
+                <Ionicons
+                  name={tab === "stats" ? "stats-chart-outline" : "people-outline"}
+                  size={13}
+                  color={isActive ? T.onAccent : T.textSecondary}
+                />
+                <Text style={{ fontSize: 12, fontWeight: "500", color: isActive ? T.onAccent : T.textSecondary }}>
+                  {tab === "stats" ? "Overview" : "Members"}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
+        {/* ════════════════════════════════════════════════════════════════════
+            OVERVIEW TAB
+        ════════════════════════════════════════════════════════════════════ */}
         {activeTab === "stats" ? (
           <>
-            {/* Workspace Header Info */}
-            <View className="mb-6 rounded-2xl p-5 border flex-row items-center" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-              {activeWorkspace?.logoUrl ? (
-                <Image 
-                  source={{ uri: activeWorkspace.logoUrl }} 
-                  style={{ width: 48, height: 48, borderRadius: 12, marginRight: 16 }} 
-                />
-              ) : null}
-              <View className="flex-1">
-                <Text className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: themeColor }}>
-                  Workspace Active
-                </Text>
-                <Text className="text-2xl font-bold" style={{ color: C.textPrimary }}>{activeWorkspace?.name}</Text>
+            {/* Workspace info card */}
+            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 16, marginBottom: 20 }}>
+              {activeWorkspace?.logoUrl && (
+                <Image source={{ uri: activeWorkspace.logoUrl }} style={{ width: 44, height: 44, borderRadius: 10, marginRight: 14 }} />
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: "500", color: T.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Workspace active</Text>
+                <Text style={{ fontSize: 20, fontWeight: "600", color: T.textPrimary }}>{activeWorkspace?.name}</Text>
                 {activeWorkspace?.description ? (
-                  <Text className="text-sm mt-1 leading-5" style={{ color: C.textSecondary }}>
-                    {activeWorkspace.description}
-                  </Text>
+                  <Text style={{ fontSize: 12, color: T.textSecondary, marginTop: 3, lineHeight: 18 }}>{activeWorkspace.description}</Text>
                 ) : null}
               </View>
             </View>
 
-            {/* Pinned Projects & Tasks Section */}
+            {/* ── Pinned Items ── */}
             {(pinnedProjects.length > 0 || pinnedTasks.length > 0) && (
-              <View className="mb-6">
-                <Text className="text-lg font-bold mb-4" style={{ color: C.textPrimary }}>📌 Pinned Items</Text>
-                
-                {/* Pinned Projects */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontSize: 15, fontWeight: "600", color: T.textPrimary, marginBottom: 14 }}>Pinned items</Text>
+
                 {pinnedProjects.length > 0 && (
-                  <View className="mb-4">
-                    <Text className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: C.textSecondary }}>Projects</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "500", color: T.textSecondary, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Projects</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                       {pinnedProjects.map((proj: any) => (
                         <TouchableOpacity
                           key={proj._id}
                           onPress={() => handleSelectProjectFromSearch(proj)}
-                          className="mr-3 p-4 rounded-2xl border"
-                          style={{
-                            backgroundColor: C.card,
-                            borderColor: proj.color || C.cardBorder,
-                            borderLeftWidth: 5,
-                            minWidth: 150
-                          }}
+                          style={{ marginRight: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderLeftWidth: 3, borderLeftColor: proj.color || T.accent, minWidth: 140 }}
                         >
-                          <Text className="font-bold text-sm" style={{ color: C.textPrimary }} numberOfLines={1}>{proj.name}</Text>
-                          <Text className="text-xs mt-1" style={{ color: C.textSecondary }}>Active Workspace</Text>
+                          <Text style={{ fontWeight: "500", fontSize: 12, color: T.textPrimary }} numberOfLines={1}>{proj.name}</Text>
+                          <Text style={{ fontSize: 10, color: T.textSecondary, marginTop: 3 }}>Active workspace</Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
                   </View>
                 )}
 
-                {/* Pinned Tasks */}
                 {pinnedTasks.length > 0 && (
                   <View>
-                    <Text className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: C.textSecondary }}>Tasks</Text>
+                    <Text style={{ fontSize: 10, fontWeight: "500", color: T.textSecondary, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Tasks</Text>
                     {pinnedTasks.map((task: any) => (
                       <TouchableOpacity
                         key={task._id}
                         onPress={() => handleSelectTaskFromSearch(task)}
-                        className="mb-2 p-4 rounded-2xl border flex-row items-center justify-between"
-                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 12, padding: 12, marginBottom: 6 }}
                       >
-                        <View className="flex-1 mr-3">
-                          <View className="flex-row items-center mb-1">
-                            <View className="w-2 h-2 rounded-full mr-2" style={{
-                              backgroundColor: task.priority === "high" ? "#E24B4A" : task.priority === "medium" ? "#EF9F27" : "#5DCAA5"
-                            }} />
-                            <Text className="font-semibold text-sm" style={{ color: C.textPrimary }} numberOfLines={1}>{task.title}</Text>
+                        <View style={{ flex: 1, marginRight: 10 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 3 }}>
+                            <View style={{ width: 7, height: 7, borderRadius: 4, marginRight: 8, backgroundColor: task.priority === "high" ? T.redText : task.priority === "medium" ? T.amberText : T.greenText }} />
+                            <Text style={{ fontWeight: "500", fontSize: 12, color: T.textPrimary }} numberOfLines={1}>{task.title}</Text>
                           </View>
-                          <Text className="text-xs" style={{ color: C.textSecondary }}>
-                            {task.status.toUpperCase()} • {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}
+                          <Text style={{ fontSize: 10, color: T.textSecondary }}>
+                            {task.status.toUpperCase()} · {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}
                           </Text>
                         </View>
-                        <Ionicons name="pin" size={16} color={themeColor} />
+                        <Ionicons name="pin" size={15} color={T.accent} />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -790,230 +646,163 @@ return (
               </View>
             )}
 
-            {/* Dynamic Dashboard Stats */}
-            <View className="flex-row justify-between items-center mb-4">
-              <Text className="text-lg font-bold" style={{ color: C.textPrimary }}>
-                {dashboardMode === "workspace" ? "Workspace Stats" : "Personal Productivity"}
+            {/* ── Dashboard mode selector ── */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: T.textPrimary }}>
+                {dashboardMode === "workspace" ? "Workspace stats" : "Personal productivity"}
               </Text>
             </View>
 
-            {/* Dashboard Mode Selector */}
-            <View className="flex-row mb-5 p-1 rounded-2xl border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-              <TouchableOpacity
-                onPress={() => setDashboardMode("workspace")}
-                className="flex-1 py-2.5 items-center justify-center rounded-xl"
-                style={{ backgroundColor: dashboardMode === "workspace" ? themeColor : "transparent" }}
-              >
-                <Text
-                  className="font-bold text-xs uppercase tracking-wider"
-                  style={{ color: dashboardMode === "workspace" ? "#0C101B" : C.textSecondary }}
-                >
-                  Workspace View
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setDashboardMode("personal")}
-                className="flex-1 py-2.5 items-center justify-center rounded-xl"
-                style={{ backgroundColor: dashboardMode === "personal" ? themeColor : "transparent" }}
-              >
-                <Text
-                  className="font-bold text-xs uppercase tracking-wider"
-                  style={{ color: dashboardMode === "personal" ? "#0C101B" : C.textSecondary }}
-                >
-                  Personal Stats
-                </Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: "row", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 12, padding: 4, marginBottom: 16 }}>
+              {(["workspace", "personal"] as const).map((mode) => {
+                const isActive = dashboardMode === mode;
+                return (
+                  <TouchableOpacity
+                    key={mode}
+                    onPress={() => setDashboardMode(mode)}
+                    style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 9, borderRadius: 9, backgroundColor: isActive ? T.accent : "transparent" }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "500", color: isActive ? T.onAccent : T.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      {mode === "workspace" ? "Workspace view" : "Personal stats"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
+            {/* ── Stats cards ── */}
             {loadingStats ? (
-              <ActivityIndicator
-                size="large"
-                color={themeColor}
-                style={{ transform: [{ scale: 1.5 }] }}
-                className="my-8"
-              />
+              <ActivityIndicator size="large" color={T.accent} style={{ marginVertical: 32 }} />
             ) : dashboardMode === "workspace" ? (
-              <View className="mb-6">
-                <View className="flex-row gap-3 mb-3">
-                  {/* Total Tasks Card */}
-                  <View
-                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
-                    style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
-                  >
-                    <Ionicons name="clipboard-outline" size={24} color={themeColor} />
-                    <View className="mt-2">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.textSecondary }}>
-                        Total Tasks
-                      </Text>
-                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
-                        {analytics?.summary?.total ?? stats.total}
-                      </Text>
+
+              /* ── Workspace stats ── */
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+                  {/* Total */}
+                  <View style={{ flex: 1, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
+                    <Ionicons name="clipboard-outline" size={22} color={T.accent} />
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.textSecondary }}>Total tasks</Text>
+                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.summary?.total ?? stats.total}</Text>
                     </View>
                   </View>
-
-                  {/* Completed Card */}
-                  <View
-                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
-                    style={{ backgroundColor: isDarkMode ? "#1E2A24" : "#EBFBEE", borderColor: isDarkMode ? "#2C3B33" : "#D3F9D8" }}
-                  >
-                    <Ionicons name="checkmark-circle-outline" size={24} color="#5DCAA5" />
-                    <View className="mt-2">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? "#79A88C" : "#2B8A3E" }}>
-                        Completed
-                      </Text>
-                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
-                        {analytics?.summary?.completed ?? stats.completed}
-                      </Text>
+                  {/* Completed */}
+                  <View style={{ flex: 1, backgroundColor: T.greenBg, borderWidth: 0.5, borderColor: T.greenBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
+                    <Ionicons name="checkmark-circle-outline" size={22} color={T.greenText} />
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.greenText }}>Completed</Text>
+                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.summary?.completed ?? stats.completed}</Text>
                     </View>
                   </View>
                 </View>
-
-                <View className="flex-row gap-3">
-                  {/* In Progress Card */}
-                  <View
-                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
-                    style={{ backgroundColor: isDarkMode ? "#241E2C" : "#F3F0FF", borderColor: isDarkMode ? "#332B3E" : "#E5DBFF" }}
-                  >
-                    <Ionicons name="flash-outline" size={24} color="#AFA9EC" />
-                    <View className="mt-2">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? "#A89AB8" : "#7048E8" }}>
-                        In Progress
-                      </Text>
-                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
-                        {analytics?.summary?.inProgress ?? stats.inProgress}
-                      </Text>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  {/* In progress */}
+                  <View style={{ flex: 1, backgroundColor: T.purpleBg, borderWidth: 0.5, borderColor: T.purpleBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
+                    <Ionicons name="flash-outline" size={22} color={T.purpleText} />
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.purpleText }}>In progress</Text>
+                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.summary?.inProgress ?? stats.inProgress}</Text>
                     </View>
                   </View>
-
-                  {/* Overdue Card */}
-                  <View
-                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
-                    style={{
-                      backgroundColor: (analytics?.summary?.overdue ?? 0) > 0 ? (isDarkMode ? "rgba(226,75,74,0.1)" : "#FFF5F5") : (isDarkMode ? "#2C2218" : "#FFF9DB"),
-                      borderColor: (analytics?.summary?.overdue ?? 0) > 0 ? (isDarkMode ? "rgba(226,75,74,0.2)" : "#FFE3E3") : (isDarkMode ? "#3D3122" : "#FFF3BF"),
-                    }}
-                  >
-                    <Ionicons name="alert-circle-outline" size={24} color={(analytics?.summary?.overdue ?? 0) > 0 ? "#E24B4A" : "#EF9F27"} />
-                    <View className="mt-2">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: (analytics?.summary?.overdue ?? 0) > 0 ? "#E24B4A" : (isDarkMode ? "#C7A87E" : "#E8590C") }}>
-                        Overdue
-                      </Text>
-                      <Text className="text-2xl font-extrabold mt-1" style={{ color: (analytics?.summary?.overdue ?? 0) > 0 ? "#E24B4A" : C.textPrimary }}>
-                        {analytics?.summary?.overdue ?? 0}
-                      </Text>
-                    </View>
-                  </View>
+                  {/* Overdue */}
+                  {(() => {
+                    const overdue = analytics?.summary?.overdue ?? 0;
+                    return (
+                      <View style={{ flex: 1, backgroundColor: overdue > 0 ? T.redBg : "rgba(250,166,26,0.08)", borderWidth: 0.5, borderColor: overdue > 0 ? T.redBorder : "rgba(250,166,26,0.16)", borderRadius: 16, padding: 14, minHeight: 112 }}>
+                        <Ionicons name="alert-circle-outline" size={22} color={overdue > 0 ? T.redText : T.amberText} />
+                        <View style={{ marginTop: 10 }}>
+                          <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: overdue > 0 ? T.redText : T.amberText }}>Overdue</Text>
+                          <Text style={{ fontSize: 26, fontWeight: "600", color: overdue > 0 ? T.redText : T.textPrimary, marginTop: 3 }}>{overdue}</Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </View>
               </View>
+
             ) : (
-              <View className="mb-6">
-                <View className="flex-row gap-3 mb-3">
-                  {/* Total Assigned */}
-                  <View
-                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
-                    style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
-                  >
-                    <Ionicons name="people-outline" size={24} color={themeColor} />
-                    <View className="mt-2">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.textSecondary }}>
-                        Assigned To Me
-                      </Text>
-                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
-                        {analytics?.personal?.total ?? 0}
-                      </Text>
+
+              /* ── Personal stats ── */
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+                  {/* Assigned */}
+                  <View style={{ flex: 1, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
+                    <Ionicons name="person-outline" size={22} color={T.accent} />
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.textSecondary }}>Assigned to me</Text>
+                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.personal?.total ?? 0}</Text>
                     </View>
                   </View>
-
-                  {/* Completed */}
-                  <View
-                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
-                    style={{ backgroundColor: isDarkMode ? "#1E2A24" : "#EBFBEE", borderColor: isDarkMode ? "#2C3B33" : "#D3F9D8" }}
-                  >
-                    <Ionicons name="checkmark-done-circle-outline" size={24} color="#5DCAA5" />
-                    <View className="mt-2">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? "#79A88C" : "#2B8A3E" }}>
-                        My Completed
-                      </Text>
-                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
-                        {analytics?.personal?.completed ?? 0}
-                      </Text>
+                  {/* My completed */}
+                  <View style={{ flex: 1, backgroundColor: T.greenBg, borderWidth: 0.5, borderColor: T.greenBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
+                    <Ionicons name="checkmark-done-circle-outline" size={22} color={T.greenText} />
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.greenText }}>My completed</Text>
+                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.personal?.completed ?? 0}</Text>
                     </View>
                   </View>
                 </View>
-
-                <View className="flex-row gap-3">
-                  {/* Completed This Week */}
-                  <View
-                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
-                    style={{ backgroundColor: isDarkMode ? "#241E2C" : "#F3F0FF", borderColor: isDarkMode ? "#332B3E" : "#E5DBFF" }}
-                  >
-                    <Ionicons name="calendar-outline" size={24} color="#AFA9EC" />
-                    <View className="mt-2">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? "#A89AB8" : "#7048E8" }}>
-                        Done This Week
-                      </Text>
-                      <Text className="text-2xl font-extrabold mt-1" style={{ color: C.textPrimary }}>
-                        {analytics?.personal?.completedThisWeek ?? 0}
-                      </Text>
+                <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+                  {/* Done this week */}
+                  <View style={{ flex: 1, backgroundColor: T.purpleBg, borderWidth: 0.5, borderColor: T.purpleBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
+                    <Ionicons name="calendar-outline" size={22} color={T.purpleText} />
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.purpleText }}>Done this week</Text>
+                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.personal?.completedThisWeek ?? 0}</Text>
                     </View>
                   </View>
-
-                  {/* Overdue Assigned */}
-                  <View
-                    className="flex-1 rounded-2xl p-4 justify-between min-h-[120px] border"
-                    style={{
-                      backgroundColor: (analytics?.personal?.overdue ?? 0) > 0 ? (isDarkMode ? "rgba(226,75,74,0.1)" : "#FFF5F5") : (isDarkMode ? "#2C2218" : "#FFF9DB"),
-                      borderColor: (analytics?.personal?.overdue ?? 0) > 0 ? (isDarkMode ? "rgba(226,75,74,0.2)" : "#FFE3E3") : (isDarkMode ? "#3D3122" : "#FFF3BF"),
-                    }}
-                  >
-                    <Ionicons name="alert-circle-outline" size={24} color={(analytics?.personal?.overdue ?? 0) > 0 ? "#E24B4A" : "#EF9F27"} />
-                    <View className="mt-2">
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: (analytics?.personal?.overdue ?? 0) > 0 ? "#E24B4A" : (isDarkMode ? "#C7A87E" : "#E8590C") }}>
-                        My Overdue
-                      </Text>
-                      <Text className="text-2xl font-extrabold mt-1" style={{ color: (analytics?.personal?.overdue ?? 0) > 0 ? "#E24B4A" : C.textPrimary }}>
-                        {analytics?.personal?.overdue ?? 0}
-                      </Text>
-                    </View>
-                  </View>
+                  {/* My overdue */}
+                  {(() => {
+                    const overdue = analytics?.personal?.overdue ?? 0;
+                    return (
+                      <View style={{ flex: 1, backgroundColor: overdue > 0 ? T.redBg : "rgba(250,166,26,0.08)", borderWidth: 0.5, borderColor: overdue > 0 ? T.redBorder : "rgba(250,166,26,0.16)", borderRadius: 16, padding: 14, minHeight: 112 }}>
+                        <Ionicons name="alert-circle-outline" size={22} color={overdue > 0 ? T.redText : T.amberText} />
+                        <View style={{ marginTop: 10 }}>
+                          <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: overdue > 0 ? T.redText : T.amberText }}>My overdue</Text>
+                          <Text style={{ fontSize: 26, fontWeight: "600", color: overdue > 0 ? T.redText : T.textPrimary, marginTop: 3 }}>{overdue}</Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </View>
 
-                {/* Circular completion rate layout */}
-                <View className="mt-4 p-4 rounded-2xl border flex-row items-center justify-between" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-                  <View>
-                    <Text className="text-sm font-bold" style={{ color: C.textPrimary }}>Completion Rate</Text>
-                    <Text className="text-xs" style={{ color: C.textSecondary }}>Ratio of completed assigned tasks</Text>
+                {/* Completion rate bar */}
+                <View style={{ backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 16, marginBottom: 2 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: "500", color: T.textPrimary }}>Completion rate</Text>
+                      <Text style={{ fontSize: 11, color: T.textSecondary, marginTop: 2 }}>Ratio of completed assigned tasks</Text>
+                    </View>
+                    <Text style={{ fontSize: 26, fontWeight: "600", color: T.accent }}>{analytics?.personal?.completionRate ?? 0}%</Text>
                   </View>
-                  <Text className="text-2xl font-black" style={{ color: themeColor }}>{analytics?.personal?.completionRate ?? 0}%</Text>
+                  <View style={{ height: 5, backgroundColor: T.input, borderRadius: 3, overflow: "hidden" }}>
+                    <View style={{ height: "100%", borderRadius: 3, backgroundColor: T.accent, width: `${analytics?.personal?.completionRate ?? 0}%` as any }} />
+                  </View>
                 </View>
               </View>
             )}
 
-            {/* Project Progress Breakdown */}
+            {/* ── Project progress breakdown ── */}
             {analytics?.projects && analytics.projects.length > 0 && (
-              <View className="mb-6">
-                <Text className="text-lg font-bold mb-4" style={{ color: C.textPrimary }}>Project Progress</Text>
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontSize: 15, fontWeight: "600", color: T.textPrimary, marginBottom: 14 }}>Project progress</Text>
                 {analytics.projects.map((proj: any) => {
                   const progress = proj.total > 0 ? Math.round((proj.completed / proj.total) * 100) : 0;
                   return (
-                    <View key={proj.projectId} className="mb-3 p-4 rounded-2xl border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-                      <View className="flex-row justify-between items-center mb-2">
-                        <View className="flex-row items-center">
-                          <View className="w-2.5 h-2.5 rounded-full mr-2.5" style={{ backgroundColor: proj.color }} />
-                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{proj.title}</Text>
+                    <View key={proj.projectId} style={{ marginBottom: 8, padding: 14, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 14 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <View style={{ width: 9, height: 9, borderRadius: 5, marginRight: 8, backgroundColor: proj.color || T.accent }} />
+                          <Text style={{ fontWeight: "500", fontSize: 12, color: T.textPrimary }}>{proj.title}</Text>
                         </View>
-                        <Text className="text-xs font-bold" style={{ color: themeColor }}>{progress}%</Text>
+                        <Text style={{ fontSize: 11, fontWeight: "500", color: T.accent }}>{progress}%</Text>
                       </View>
-                      <View className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-                        <View className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: proj.color }} />
+                      <View style={{ height: 4, backgroundColor: T.input, borderRadius: 2, overflow: "hidden" }}>
+                        <View style={{ height: "100%", borderRadius: 2, backgroundColor: proj.color || T.accent, width: `${progress}%` as any }} />
                       </View>
-                      <View className="flex-row justify-between mt-2">
-                        <Text className="text-[10px]" style={{ color: C.textSecondary }}>{proj.completed} of {proj.total} tasks completed</Text>
-                        {proj.overdue > 0 && (
-                          <Text className="text-[10px] font-bold" style={{ color: "#E24B4A" }}>
-                            {proj.overdue} overdue
-                          </Text>
-                        )}
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+                        <Text style={{ fontSize: 10, color: T.textSecondary }}>{proj.completed} of {proj.total} tasks</Text>
+                        {proj.overdue > 0 && <Text style={{ fontSize: 10, fontWeight: "500", color: T.redText }}>{proj.overdue} overdue</Text>}
                       </View>
                     </View>
                   );
@@ -1021,33 +810,25 @@ return (
               </View>
             )}
 
-            {/* Team Productivity Leaderboard */}
+            {/* ── Team productivity leaderboard ── */}
             {analytics?.productivity && analytics.productivity.length > 0 && (
-              <View className="mb-6 rounded-2xl p-5 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-                <Text className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: themeColor }}>
-                  Team Productivity
-                </Text>
-                {analytics.productivity.slice(0, 5).map((member: any) => {
+              <View style={{ backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 16, marginBottom: 20 }}>
+                <Text style={{ fontSize: 11, fontWeight: "500", color: T.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Team productivity</Text>
+                {analytics.productivity.slice(0, 5).map((member: any, idx: number) => {
                   const pct = member.totalCount > 0 ? Math.round((member.completedCount / member.totalCount) * 100) : 0;
                   return (
-                    <View key={member.userId} className="mb-4 last:mb-0">
-                      <View className="flex-row justify-between items-center mb-1.5">
-                        <View className="flex-row items-center flex-1 mr-2">
-                          <View className="w-6 h-6 rounded-full items-center justify-center mr-2.5" style={{ backgroundColor: C.divider }}>
-                            <Text className="font-bold text-[9px]" style={{ color: themeColor }}>
-                              {member.name.substring(0, 2).toUpperCase()}
-                            </Text>
+                    <View key={member.userId} style={{ marginBottom: idx < 4 ? 14 : 0 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+                          <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: T.input, alignItems: "center", justifyContent: "center", marginRight: 8 }}>
+                            <Text style={{ fontWeight: "500", fontSize: 9, color: T.accent }}>{member.name.substring(0, 2).toUpperCase()}</Text>
                           </View>
-                          <Text className="text-xs font-semibold" style={{ color: C.textPrimary }} numberOfLines={1}>
-                            {member.name}
-                          </Text>
+                          <Text style={{ fontSize: 12, fontWeight: "500", color: T.textPrimary }} numberOfLines={1}>{member.name}</Text>
                         </View>
-                        <Text className="text-[10px]" style={{ color: C.textSecondary }}>
-                          {member.completedCount} / {member.totalCount} done ({pct}%)
-                        </Text>
+                        <Text style={{ fontSize: 10, color: T.textSecondary }}>{member.completedCount}/{member.totalCount} ({pct}%)</Text>
                       </View>
-                      <View className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
-                        <View className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: themeColor }} />
+                      <View style={{ height: 3, backgroundColor: T.input, borderRadius: 2, overflow: "hidden" }}>
+                        <View style={{ height: "100%", borderRadius: 2, backgroundColor: T.accent, width: `${pct}%` as any }} />
                       </View>
                     </View>
                   );
@@ -1055,56 +836,52 @@ return (
               </View>
             )}
 
-            {/* Quick Actions */}
-            <Text className="text-lg font-bold mb-4" style={{ color: C.textPrimary }}>Quick Actions</Text>
-            <View className="flex-row gap-3 mb-8">
+            {/* ── Quick actions ── */}
+            <Text style={{ fontSize: 15, fontWeight: "600", color: T.textPrimary, marginBottom: 12 }}>Quick actions</Text>
+            <View style={{ flexDirection: "row", gap: 10, marginBottom: 24 }}>
               <TouchableOpacity
                 onPress={() => router.push("/(tabs)/projects")}
-                className="flex-1 rounded-xl p-4 items-center border"
-                style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                style={{ flex: 1, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 14, padding: 14, alignItems: "center" }}
               >
-                <Ionicons name="folder-outline" size={22} color={themeColor} style={{ marginBottom: 6 }} />
-                <Text className="text-sm font-semibold" style={{ color: C.textPrimary }}>View Projects</Text>
+                <Ionicons name="folder-outline" size={22} color={T.accent} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: "500", color: T.textPrimary }}>View projects</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => router.push("/(tabs)/tasks")}
-                className="flex-1 rounded-xl p-4 items-center border"
-                style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
+                style={{ flex: 1, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 14, padding: 14, alignItems: "center" }}
               >
-                <Ionicons name="grid-outline" size={22} color={themeColor} style={{ marginBottom: 6 }} />
-                <Text className="text-sm font-semibold" style={{ color: C.textPrimary }}>Kanban Board</Text>
+                <Ionicons name="grid-outline" size={22} color={T.accent} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: "500", color: T.textPrimary }}>Kanban board</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Activity Timeline */}
-            <Text className="text-lg font-bold mb-4" style={{ color: C.textPrimary }}>Recent Activity</Text>
+            {/* ── Recent activity ── */}
+            <Text style={{ fontSize: 15, fontWeight: "600", color: T.textPrimary, marginBottom: 12 }}>Recent activity</Text>
             {loadingActivities ? (
-              <ActivityIndicator size="small" color={themeColor} className="my-6" />
+              <ActivityIndicator size="small" color={T.accent} style={{ marginVertical: 24 }} />
             ) : activities.length === 0 ? (
-              <View className="rounded-2xl p-6 mb-8 border items-center justify-center" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-                <Ionicons name="time-outline" size={24} color={C.textMuted} style={{ marginBottom: 6 }} />
-                <Text className="text-sm" style={{ color: C.textSecondary }}>No activity recorded yet</Text>
+              <View style={{ backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 14, padding: 24, marginBottom: 32, alignItems: "center" }}>
+                <Ionicons name="time-outline" size={22} color={T.textMuted} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, color: T.textSecondary }}>No activity recorded yet</Text>
               </View>
             ) : (
-              <View className="rounded-2xl p-5 mb-8 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+              <View style={{ backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 14, padding: 16, marginBottom: 32 }}>
                 {activities.slice(0, 5).map((act, idx) => {
                   const isLast = idx === Math.min(activities.length, 5) - 1;
                   return (
-                    <View key={act._id} className="flex-row mb-4 last:mb-0">
-                      {/* Left indicator line/dot */}
-                      <View className="items-center mr-3">
-                        <View className="w-6 h-6 rounded-full items-center justify-center" style={{ backgroundColor: C.input }}>
-                          <Ionicons name={getActivityIcon(act.action)} size={12} color={themeColor} />
+                    <View key={act._id} style={{ flexDirection: "row", marginBottom: isLast ? 0 : 14 }}>
+                      <View style={{ alignItems: "center", marginRight: 12 }}>
+                        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: T.input, alignItems: "center", justifyContent: "center" }}>
+                          <Ionicons name={getActivityIcon(act.action)} size={13} color={T.accent} />
                         </View>
-                        {!isLast && <View className="w-[1.5px] flex-1 my-1" style={{ backgroundColor: C.divider }} />}
+                        {!isLast && <View style={{ width: 1, flex: 1, marginVertical: 3, backgroundColor: T.divider }} />}
                       </View>
-                      <View className="flex-1 pb-2">
-                        <Text className="text-sm font-semibold" style={{ color: C.textPrimary }}>
-                          {getFullName(act.user)} <Text className="font-normal" style={{ color: C.textSecondary }}>{act.details}</Text>
+                      <View style={{ flex: 1, paddingBottom: 2 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "500", color: T.textPrimary }}>
+                          {getFullName(act.user)}{" "}
+                          <Text style={{ fontWeight: "400", color: T.textSecondary }}>{act.details}</Text>
                         </Text>
-                        <Text className="text-[10px] mt-1" style={{ color: C.textMuted }}>
-                          {new Date(act.createdAt).toLocaleString()}
-                        </Text>
+                        <Text style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{new Date(act.createdAt).toLocaleString()}</Text>
                       </View>
                     </View>
                   );
@@ -1112,139 +889,144 @@ return (
               </View>
             )}
           </>
+
         ) : (
+        /* ════════════════════════════════════════════════════════════════════
+            MEMBERS TAB
+        ════════════════════════════════════════════════════════════════════ */
           <>
-            {/* Invite Members Portal */}
+            {/* ── Invite members ── */}
             {canManage && (
-              <View className="rounded-2xl p-5 mb-6 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-                <Text className="font-semibold text-base mb-3" style={{ color: C.textPrimary }}>Invite Team Members</Text>
-                <View className="rounded-xl px-4 border flex-row items-center" style={{ backgroundColor: C.input, borderColor: C.inputBorder }}>
-                  <Ionicons name="search-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
+              <View style={{ backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 16, marginBottom: 16 }}>
+                <Text style={{ fontSize: 14, fontWeight: "500", color: T.textPrimary, marginBottom: 12 }}>Invite team members</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: T.input, borderWidth: 0.5, borderColor: T.inputBorder, borderRadius: 10, paddingHorizontal: 12 }}>
+                  <Ionicons name="search-outline" size={15} color={T.textMuted} style={{ marginRight: 8 }} />
                   <TextInput
-                    className="flex-1 py-3 text-sm"
-                    style={{ color: C.textPrimary }}
-                    placeholder="Search user by email or username..."
-                    placeholderTextColor={C.textMuted}
+                    style={{ flex: 1, paddingVertical: 11, fontSize: 13, color: T.textPrimary }}
+                    placeholder="Search by email or username..."
+                    placeholderTextColor={T.textMuted}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                   />
-                  {searchingUsers && <ActivityIndicator size="small" color={themeColor} />}
+                  {searchingUsers && <ActivityIndicator size="small" color={T.accent} />}
                 </View>
 
-                {searchResults.length > 0 ? (
-                  <View className="mt-3 rounded-xl border p-2" style={{ backgroundColor: C.bg, borderColor: C.cardBorder }}>
-                    {searchResults.map((item) => (
+                {searchResults.length > 0 && (
+                  <View style={{ marginTop: 10, backgroundColor: T.bg, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 10, overflow: "hidden" }}>
+                    {searchResults.map((item, idx) => (
                       <View
                         key={item._id}
-                        className="flex-row items-center justify-between py-2.5 px-3 border-b last:border-0"
-                        style={{ borderBottomColor: C.card }}
+                        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderBottomWidth: idx < searchResults.length - 1 ? 0.5 : 0, borderBottomColor: T.cardBorder }}
                       >
-                        <View className="flex-1 mr-3">
-                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>
-                            {item.username.firstname} {item.username.lastname}
-                          </Text>
-                          <Text className="text-xs" style={{ color: C.textSecondary }}>{item.email}</Text>
+                        <View style={{ flex: 1, marginRight: 10 }}>
+                          <Text style={{ fontWeight: "500", fontSize: 13, color: T.textPrimary }}>{item.username.firstname} {item.username.lastname}</Text>
+                          <Text style={{ fontSize: 11, color: T.textSecondary, marginTop: 2 }}>{item.email}</Text>
                         </View>
                         <TouchableOpacity
                           disabled={invitingUserId === item._id}
                           onPress={() => handleInviteUser(item._id)}
-                          className="px-3 py-1.5 rounded-lg"
-                          style={{ backgroundColor: themeColor }}
+                          style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: T.accent }}
                         >
                           {invitingUserId === item._id ? (
-                            <ActivityIndicator size="small" color={C.onAccent} />
+                            <ActivityIndicator size="small" color={T.onAccent} />
                           ) : (
-                            <Text className="text-xs font-bold" style={{ color: C.onAccent }}>Add</Text>
+                            <Text style={{ fontSize: 12, fontWeight: "500", color: T.onAccent }}>Add</Text>
                           )}
                         </TouchableOpacity>
                       </View>
                     ))}
                   </View>
-                ) : searchQuery.trim().length >= 2 && !searchingUsers ? (
-                  <Text className="text-xs mt-2 text-center" style={{ color: C.textMuted }}>No users found</Text>
-                ) : null}
+                )}
+                {searchQuery.trim().length >= 2 && !searchingUsers && searchResults.length === 0 && (
+                  <Text style={{ fontSize: 12, color: T.textMuted, textAlign: "center", marginTop: 10 }}>No users found</Text>
+                )}
               </View>
             )}
 
-            {/* Members List */}
-            <Text className="text-lg font-bold mb-3" style={{ color: C.textPrimary }}>Workspace Members</Text>
-            <View className="rounded-2xl overflow-hidden mb-8 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
+            {/* ── Members list ── */}
+            <Text style={{ fontSize: 15, fontWeight: "600", color: T.textPrimary, marginBottom: 12 }}>
+              Workspace members
+            </Text>
+
+            {/* member count pill */}
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: T.input, borderWidth: 0.5, borderColor: T.cardBorder }}>
+                <Text style={{ fontSize: 11, color: T.textSecondary }}>{activeWorkspace?.members?.length ?? 0} members</Text>
+              </View>
+            </View>
+
+            <View style={{ backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, overflow: "hidden", marginBottom: 32 }}>
               {activeWorkspace?.members.map((member: any, index: number) => {
                 const isMemberObject = typeof member.user === "object";
-                const memberId = isMemberObject ? member.user._id : member.user;
+                const memberId  = isMemberObject ? member.user._id : member.user;
                 const firstname = isMemberObject ? member.user.username.firstname : "User";
-                const lastname = isMemberObject ? member.user.username.lastname : "";
-                const email = isMemberObject ? member.user.email : "";
-                const role = member.role;
-
-                const isMe = memberId === user?._id;
+                const lastname  = isMemberObject ? member.user.username.lastname  : "";
+                const email     = isMemberObject ? member.user.email : "";
+                const role      = member.role;
+                const isMe      = memberId === user?._id;
                 const avatarColors = getAvatarColors(firstname);
+                const isLast    = index === activeWorkspace.members.length - 1;
+
+                // role badge color
+                const roleBg   = role === "admin" ? "rgba(88,101,242,0.12)" : T.input;
+                const roleText = role === "admin" ? T.accent : T.textSecondary;
 
                 return (
                   <View
                     key={memberId || index}
-                    className={`flex-row items-center justify-between p-4 border-b ${
-                      index === activeWorkspace.members.length - 1 ? "border-0" : ""
-                    }`}
-                    style={{ borderBottomColor: index === activeWorkspace.members.length - 1 ? "transparent" : C.divider }}
+                    style={{ borderBottomWidth: isLast ? 0 : 0.5, borderBottomColor: T.divider }}
                   >
-                    <TouchableOpacity
-                      onPress={() => isMemberObject && handleOpenUserProfile(member.user)}
-                      className="flex-1 mr-3 flex-row items-center"
-                    >
-                      {isMemberObject && member.user.avatarUrl ? (
-                        <Image
-                          source={{ uri: member.user.avatarUrl }}
-                          className="w-9 h-9 rounded-full mr-3"
-                        />
-                      ) : (
-                        <View
-                          className="w-9 h-9 rounded-full items-center justify-center mr-3"
-                          style={{ backgroundColor: avatarColors.bg }}
-                        >
-                          <Text className="font-bold text-xs" style={{ color: avatarColors.text }}>
-                            {(firstname?.[0] || "").toUpperCase()}{(lastname?.[0] || "").toUpperCase()}
-                          </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", padding: 14 }}>
+                      {/* Avatar */}
+                      <TouchableOpacity onPress={() => isMemberObject && handleOpenUserProfile(member.user)} style={{ marginRight: 12 }}>
+                        {isMemberObject && member.user.avatarUrl ? (
+                          <Image source={{ uri: member.user.avatarUrl }} style={{ width: 42, height: 42, borderRadius: 21 }} />
+                        ) : (
+                          <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: avatarColors.bg, alignItems: "center", justifyContent: "center", borderWidth: 0.5, borderColor: T.cardBorder }}>
+                            <Text style={{ fontWeight: "500", fontSize: 13, color: avatarColors.text }}>
+                              {(firstname?.[0] || "").toUpperCase()}{(lastname?.[0] || "").toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        {/* Online dot — decorative */}
+                        <View style={{ position: "absolute", bottom: 1, right: 1, width: 10, height: 10, borderRadius: 5, backgroundColor: T.greenText, borderWidth: 1.5, borderColor: T.card }} />
+                      </TouchableOpacity>
+
+                      {/* Info */}
+                      <TouchableOpacity style={{ flex: 1 }} onPress={() => isMemberObject && handleOpenUserProfile(member.user)}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                          <Text style={{ fontWeight: "500", fontSize: 14, color: T.textPrimary }}>{firstname} {lastname}</Text>
+                          {isMe && (
+                            <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: `${T.accent}22` }}>
+                              <Text style={{ fontSize: 10, color: T.accent, fontWeight: "500" }}>You</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 11, color: T.textSecondary }}>{email}</Text>
+                        {/* Role badge */}
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: roleBg, alignSelf: "flex-start", marginTop: 5 }}>
+                          <Text style={{ fontSize: 10, fontWeight: "500", textTransform: "uppercase", letterSpacing: 0.5, color: roleText }}>{role}</Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Actions */}
+                      {canManage && !isMe && getWorkspaceOwnerId(activeWorkspace) !== memberId && (
+                        <View style={{ flexDirection: "row", gap: 6 }}>
+                          <TouchableOpacity
+                            onPress={() => handleChangeRole(memberId, role)}
+                            style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: T.input, borderWidth: 0.5, borderColor: T.inputBorder }}
+                          >
+                            <Text style={{ fontSize: 11, color: T.textPrimary }}>{role === "admin" ? "Demote" : "Promote"}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveMember(memberId)}
+                            style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: T.dangerBg, borderWidth: 0.5, borderColor: T.dangerBorder }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: "500", color: T.danger }}>Remove</Text>
+                          </TouchableOpacity>
                         </View>
                       )}
-                      <View className="flex-1">
-                        <Text className="font-semibold text-base" style={{ color: C.textPrimary }}>
-                          {firstname} {lastname}{" "}
-                          {isMe && <Text className="text-xs" style={{ color: themeColor }}>(Me)</Text>}
-                        </Text>
-                        <Text className="text-xs mt-0.5" style={{ color: C.textSecondary }}>{email}</Text>
-                        <View
-                          className="px-2 py-0.5 rounded self-start mt-1.5"
-                          style={{ backgroundColor: C.tagBg }}
-                        >
-                          <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.tagText }}>
-                            {role}
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Member action buttons */}
-                    {canManage && !isMe && getWorkspaceOwnerId(activeWorkspace) !== memberId && (
-                      <View className="flex-row gap-2">
-                        <TouchableOpacity
-                          onPress={() => handleChangeRole(memberId, role)}
-                          className="px-2.5 py-1.5 rounded-lg border"
-                          style={{ backgroundColor: C.input, borderColor: C.inputBorder }}
-                        >
-                          <Text className="text-xs" style={{ color: C.textPrimary }}>
-                            {role === "admin" ? "Demote" : "Promote"}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleRemoveMember(memberId)}
-                          className="px-2.5 py-1.5 rounded-lg border"
-                          style={{ backgroundColor: C.dangerBg, borderColor: C.dangerBorder }}
-                        >
-                          <Text className="text-xs font-semibold" style={{ color: C.danger }}>Remove</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
+                    </View>
                   </View>
                 );
               })}
@@ -1254,344 +1036,236 @@ return (
       </ScrollView>
 
 
-      {/* MODAL 3: Global Search */}
-      <Modal
-        visible={searchModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSearchModalVisible(false)}
-      >
-        <SafeAreaView className="flex-1" style={{ backgroundColor: C.bg }}>
-          {/* Header */}
-          <View className="flex-row items-center px-4 py-3 border-b" style={{ borderBottomColor: C.divider }}>
-            <TouchableOpacity onPress={() => { setSearchModalVisible(false); setGlobalQuery(""); setGlobalResults(null); }} className="mr-3 p-1">
-              <Ionicons name="arrow-back" size={24} color={C.textPrimary} />
+      {/* ════════════════════════════════════════════════════════════════════
+          MODAL — Global Search
+      ════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={searchModalVisible} transparent animationType="slide" onRequestClose={() => setSearchModalVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: T.divider }}>
+            <TouchableOpacity onPress={() => { setSearchModalVisible(false); setGlobalQuery(""); setGlobalResults(null); }} style={{ marginRight: 10, padding: 4 }}>
+              <Ionicons name="arrow-back" size={22} color={T.textPrimary} />
             </TouchableOpacity>
-            <View className="flex-1 rounded-xl px-4 py-2 border flex-row items-center" style={{ backgroundColor: C.input, borderColor: C.inputBorder }}>
-              <Ionicons name="search-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: T.input, borderWidth: 0.5, borderColor: T.inputBorder, borderRadius: 10, paddingHorizontal: 12 }}>
+              <Ionicons name="search-outline" size={15} color={T.textMuted} style={{ marginRight: 8 }} />
               <TextInput
-                className="flex-1 py-1 text-sm text-white"
+                style={{ flex: 1, paddingVertical: 10, fontSize: 13, color: T.textPrimary }}
                 placeholder="Search workspaces, projects, tasks..."
-                placeholderTextColor={C.textMuted}
+                placeholderTextColor={T.textMuted}
                 autoFocus
                 value={globalQuery}
                 onChangeText={setGlobalQuery}
               />
-              {searchingGlobal && <ActivityIndicator size="small" color={themeColor} />}
+              {searchingGlobal && <ActivityIndicator size="small" color={T.accent} />}
             </View>
           </View>
 
-          <ScrollView className="flex-1 px-5 pt-4">
+          <ScrollView style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
             {globalResults ? (
-              <View className="pb-10">
-                {/* Tasks Section */}
+              <View style={{ paddingBottom: 40 }}>
                 {globalResults.tasks?.length > 0 && (
-                  <View className="mb-6">
-                    <Text className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: themeColor }}>Tasks</Text>
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "500", color: T.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Tasks</Text>
                     {globalResults.tasks.map((task: any) => (
-                      <TouchableOpacity
-                        key={task._id}
-                        onPress={() => handleSelectTaskFromSearch(task)}
-                        className="p-3 mb-2 rounded-xl border flex-row items-center justify-between"
-                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
-                      >
-                        <View className="flex-1 mr-2">
-                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{task.title}</Text>
-                          <Text className="text-xs mt-1" style={{ color: C.textSecondary }}>Project: {task.project?.name || "Unknown"}</Text>
+                      <TouchableOpacity key={task._id} onPress={() => handleSelectTaskFromSearch(task)}
+                        style={{ padding: 12, marginBottom: 6, borderRadius: 12, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={{ fontWeight: "500", fontSize: 13, color: T.textPrimary }}>{task.title}</Text>
+                          <Text style={{ fontSize: 11, color: T.textSecondary, marginTop: 2 }}>Project: {task.project?.name || "Unknown"}</Text>
                         </View>
-                        <View className="px-2 py-0.5 rounded" style={{ backgroundColor: C.tagBg }}>
-                          <Text className="text-[10px] font-bold uppercase" style={{ color: C.tagText }}>{task.status}</Text>
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: T.tagBg }}>
+                          <Text style={{ fontSize: 10, fontWeight: "500", textTransform: "uppercase", color: T.tagText }}>{task.status}</Text>
                         </View>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
 
-                {/* Projects Section */}
                 {globalResults.projects?.length > 0 && (
-                  <View className="mb-6">
-                    <Text className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: themeColor }}>Projects</Text>
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "500", color: T.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Projects</Text>
                     {globalResults.projects.map((proj: any) => (
-                      <TouchableOpacity
-                        key={proj._id}
-                        onPress={() => handleSelectProjectFromSearch(proj)}
-                        className="p-3 mb-2 rounded-xl border flex-row items-center justify-between"
-                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
-                      >
-                        <View className="flex-1">
-                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{proj.name}</Text>
-                          <Text className="text-xs mt-1" style={{ color: C.textSecondary }}>Workspace: {proj.workspace?.name || "Unknown"}</Text>
+                      <TouchableOpacity key={proj._id} onPress={() => handleSelectProjectFromSearch(proj)}
+                        style={{ padding: 12, marginBottom: 6, borderRadius: 12, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontWeight: "500", fontSize: 13, color: T.textPrimary }}>{proj.name}</Text>
+                          <Text style={{ fontSize: 11, color: T.textSecondary, marginTop: 2 }}>Workspace: {proj.workspace?.name || "Unknown"}</Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={16} color={themeColor} />
+                        <Ionicons name="chevron-forward" size={15} color={T.accent} />
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
 
-                {/* Workspaces Section */}
                 {globalResults.workspaces?.length > 0 && (
-                  <View className="mb-6">
-                    <Text className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: themeColor }}>Workspaces</Text>
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "500", color: T.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Workspaces</Text>
                     {globalResults.workspaces.map((ws: any) => (
-                      <TouchableOpacity
-                        key={ws._id}
-                        onPress={() => handleSelectWorkspaceFromSearch(ws)}
-                        className="p-3 mb-2 rounded-xl border flex-row items-center justify-between"
-                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
-                      >
-                        <View className="flex-1 mr-2">
-                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{ws.name}</Text>
-                          {ws.description ? <Text className="text-xs mt-1" style={{ color: C.textSecondary }} numberOfLines={1}>{ws.description}</Text> : null}
+                      <TouchableOpacity key={ws._id} onPress={() => handleSelectWorkspaceFromSearch(ws)}
+                        style={{ padding: 12, marginBottom: 6, borderRadius: 12, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={{ fontWeight: "500", fontSize: 13, color: T.textPrimary }}>{ws.name}</Text>
+                          {ws.description ? <Text style={{ fontSize: 11, color: T.textSecondary, marginTop: 2 }} numberOfLines={1}>{ws.description}</Text> : null}
                         </View>
-                        <Ionicons name="briefcase-outline" size={16} color={themeColor} />
+                        <Ionicons name="briefcase-outline" size={15} color={T.accent} />
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
 
-                {/* Members Section */}
                 {globalResults.users?.length > 0 && (
-                  <View className="mb-6">
-                    <Text className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: themeColor }}>Members</Text>
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "500", color: T.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Members</Text>
                     {globalResults.users.map((item: any) => (
-                      <TouchableOpacity
-                        key={item._id}
-                        onPress={() => handleOpenUserProfile(item)}
-                        className="p-3 mb-2 rounded-xl border flex-row items-center"
-                        style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
-                      >
+                      <TouchableOpacity key={item._id} onPress={() => handleOpenUserProfile(item)}
+                        style={{ padding: 12, marginBottom: 6, borderRadius: 12, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, flexDirection: "row", alignItems: "center" }}>
                         {item.avatarUrl ? (
-                          <Image
-                            source={{ uri: item.avatarUrl }}
-                            className="w-8 h-8 rounded-full mr-3"
-                          />
+                          <Image source={{ uri: item.avatarUrl }} style={{ width: 34, height: 34, borderRadius: 17, marginRight: 12 }} />
                         ) : (
-                          <View
-                            className="w-8 h-8 rounded-full items-center justify-center mr-3"
-                            style={{ backgroundColor: C.input }}
-                          >
-                            <Text className="font-bold text-xs" style={{ color: themeColor }}>
-                              {getInitials(item)}
-                            </Text>
+                          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: T.input, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                            <Text style={{ fontWeight: "500", fontSize: 11, color: T.accent }}>{getInitials(item)}</Text>
                           </View>
                         )}
-                        <View className="flex-1">
-                          <Text className="font-semibold text-sm" style={{ color: C.textPrimary }}>{getFullName(item)}</Text>
-                          <Text className="text-xs" style={{ color: C.textSecondary }}>{item.email}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontWeight: "500", fontSize: 13, color: T.textPrimary }}>{getFullName(item)}</Text>
+                          <Text style={{ fontSize: 11, color: T.textSecondary }}>{item.email}</Text>
                         </View>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
 
-                {/* Empty State when Query is run but all categories are empty */}
-                {(!globalResults.tasks?.length &&
-                  !globalResults.projects?.length &&
-                  !globalResults.workspaces?.length &&
-                  !globalResults.users?.length) && (
-                    <View className="items-center justify-center py-10">
-                      <Ionicons name="search-outline" size={32} color={C.textMuted} className="mb-2" />
-                      <Text className="text-sm" style={{ color: C.textSecondary }}>No results found for "{globalQuery}"</Text>
-                    </View>
+                {(!globalResults.tasks?.length && !globalResults.projects?.length && !globalResults.workspaces?.length && !globalResults.users?.length) && (
+                  <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 48 }}>
+                    <Ionicons name="search-outline" size={30} color={T.textMuted} style={{ marginBottom: 8 }} />
+                    <Text style={{ fontSize: 13, color: T.textSecondary }}>No results found for "{globalQuery}"</Text>
+                  </View>
                 )}
               </View>
-            ) : (
-              globalQuery.trim().length > 0 ? null : (
-                <View className="items-center justify-center py-20">
-                  <Ionicons name="search-outline" size={48} color={C.textMuted} className="mb-3" />
-                  <Text className="text-sm text-center px-6" style={{ color: C.textSecondary }}>
-                    Search for workspaces, projects, tasks, or team members across all your spaces.
-                  </Text>
-                </View>
-              )
-            )}
+            ) : globalQuery.trim().length === 0 ? (
+              <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
+                <Ionicons name="search-outline" size={44} color={T.textMuted} style={{ marginBottom: 12 }} />
+                <Text style={{ fontSize: 13, color: T.textSecondary, textAlign: "center", paddingHorizontal: 32 }}>
+                  Search workspaces, projects, tasks, or team members across all your spaces.
+                </Text>
+              </View>
+            ) : null}
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
-      {/* MODAL 1: Workspace Selector Dropdown */}
-      <Modal
-        visible={workspaceMenuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setWorkspaceMenuVisible(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setWorkspaceMenuVisible(false)}
-          className="flex-1 justify-center items-center px-6"
-          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
-        >
-          <View className="w-full max-h-[80%] rounded-3xl p-6 border" style={{ backgroundColor: C.card, borderColor: C.cardBorder }}>
-            <Text className="text-xl font-bold mb-4" style={{ color: C.textPrimary }}>Switch Workspace</Text>
-            <ScrollView className="mb-4">
+
+      {/* ════════════════════════════════════════════════════════════════════
+          MODAL — Workspace Selector
+      ════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={workspaceMenuVisible} transparent animationType="fade" onRequestClose={() => setWorkspaceMenuVisible(false)}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setWorkspaceMenuVisible(false)}
+          style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20, backgroundColor: "rgba(0,0,0,0.7)" }}>
+          <View style={{ width: "100%", maxHeight: "80%", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 24, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: "600", color: T.textPrimary, marginBottom: 16 }}>Switch workspace</Text>
+            <ScrollView style={{ marginBottom: 14 }}>
               {workspaces.map((w) => {
                 const isActive = w._id === activeWorkspace?._id;
                 return (
-                  <TouchableOpacity
-                    key={w._id}
-                    onPress={async () => {
-                      await selectWorkspace(w);
-                      setWorkspaceMenuVisible(false);
-                    }}
-                    className="flex-row justify-between items-center p-4 rounded-xl mb-2 border"
-                    style={{
-                      backgroundColor: isActive ? `${themeColor}1a` : C.input,
-                      borderColor: isActive ? themeColor : C.cardBorder,
-                    }}
-                  >
-                    <View className="flex-row items-center flex-1 mr-2">
+                  <TouchableOpacity key={w._id}
+                    onPress={async () => { await selectWorkspace(w); setWorkspaceMenuVisible(false); }}
+                    style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 14, borderRadius: 12, marginBottom: 6, borderWidth: 0.5, backgroundColor: isActive ? `${T.accent}15` : T.input, borderColor: isActive ? T.accent : T.cardBorder }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
                       {w.logoUrl ? (
-                        <Image 
-                          source={{ uri: w.logoUrl }} 
-                          style={{ width: 24, height: 24, borderRadius: 4, marginRight: 12 }} 
-                        />
+                        <Image source={{ uri: w.logoUrl }} style={{ width: 22, height: 22, borderRadius: 5, marginRight: 10 }} />
                       ) : (
-                        <View className="w-6 h-6 rounded bg-zinc-800 mr-3 items-center justify-center">
-                          <Ionicons name="briefcase-outline" size={12} color={themeColor} />
+                        <View style={{ width: 22, height: 22, borderRadius: 5, backgroundColor: T.cardBorder, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                          <Ionicons name="briefcase-outline" size={11} color={T.accent} />
                         </View>
                       )}
-                      <Text className="font-semibold text-base flex-1" style={{ color: C.textPrimary }} numberOfLines={1}>{w.name}</Text>
+                      <Text style={{ fontWeight: "500", fontSize: 14, color: T.textPrimary, flex: 1 }} numberOfLines={1}>{w.name}</Text>
                     </View>
-                    {isActive && <Ionicons name="checkmark" size={18} color={themeColor} />}
+                    {isActive && <Ionicons name="checkmark" size={16} color={T.accent} />}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-
             <TouchableOpacity
-              onPress={() => {
-                setWorkspaceMenuVisible(false);
-                router.push("/(tabs)/createWorkspace");
-              }}
-              className="py-4 rounded-xl items-center flex-row justify-center"
-              style={{ backgroundColor: themeColor }}
-            >
-              <Ionicons name="add" size={18} color={C.onAccent} style={{ marginRight: 6 }} />
-              <Text className="font-bold text-base" style={{ color: C.onAccent }}>Create Workspace</Text>
+              onPress={() => { setWorkspaceMenuVisible(false); router.push("/(tabs)/createWorkspace"); }}
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 12, backgroundColor: T.accent }}>
+              <Ionicons name="add" size={17} color={T.onAccent} style={{ marginRight: 6 }} />
+              <Text style={{ fontWeight: "600", fontSize: 14, color: T.onAccent }}>Create workspace</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* MODAL 2: Settings / Manage Workspace */}
-      <Modal
-        visible={manageModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setManageModalVisible(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setManageModalVisible(false)}
-          className="flex-1 justify-end"
-          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
-        >
-          <View className="rounded-t-3xl p-6 pb-10 border-t" style={{ backgroundColor: C.card, borderTopColor: C.cardBorder, borderTopWidth: 1 }}>
-            <View className="w-12 h-1 rounded-full self-center mb-6" style={{ backgroundColor: C.input }} />
-            <Text className="text-xl font-bold mb-4" style={{ color: C.textPrimary }}>Workspace Settings</Text>
-            <Text className="text-sm mb-6" style={{ color: C.textSecondary }}>
-              Workspace actions for "{activeWorkspace?.name}"
-            </Text>
+
+      {/* ════════════════════════════════════════════════════════════════════
+          MODAL — Workspace Settings
+      ════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={manageModalVisible} transparent animationType="slide" onRequestClose={() => setManageModalVisible(false)}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setManageModalVisible(false)}
+          style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.7)" }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36, borderTopWidth: 0.5, borderTopColor: T.cardBorder }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: T.input, alignSelf: "center", marginBottom: 20 }} />
+            <Text style={{ fontSize: 18, fontWeight: "600", color: T.textPrimary, marginBottom: 6 }}>Workspace settings</Text>
+            <Text style={{ fontSize: 13, color: T.textSecondary, marginBottom: 20 }}>Actions for "{activeWorkspace?.name}"</Text>
 
             {canManage && (
-              <TouchableOpacity
-                onPress={handleUploadLogo}
-                className="py-4 rounded-2xl items-center mb-4 flex-row justify-center border"
-                style={{ backgroundColor: C.input, borderColor: C.inputBorder }}
-              >
-                {uploadingLogo ? (
-                  <ActivityIndicator size="small" color={themeColor} />
-                ) : (
+              <TouchableOpacity onPress={handleUploadLogo}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 14, marginBottom: 10, backgroundColor: T.input, borderWidth: 0.5, borderColor: T.inputBorder }}>
+                {uploadingLogo ? <ActivityIndicator size="small" color={T.accent} /> : (
                   <>
-                    <Ionicons name="image-outline" size={17} color={themeColor} style={{ marginRight: 8 }} />
-                    <Text className="font-bold text-base" style={{ color: C.textPrimary }}>Upload Workspace Logo</Text>
+                    <Ionicons name="image-outline" size={16} color={T.accent} style={{ marginRight: 8 }} />
+                    <Text style={{ fontWeight: "500", fontSize: 14, color: T.textPrimary }}>Upload workspace logo</Text>
                   </>
                 )}
               </TouchableOpacity>
             )}
 
             {isOwner ? (
-              <TouchableOpacity
-                onPress={handleDeleteWorkspace}
-                className="py-4 rounded-2xl items-center mb-4 flex-row justify-center border"
-                style={{ backgroundColor: C.dangerBg, borderColor: C.dangerBorder }}
-              >
-                <Ionicons name="trash-outline" size={17} color={C.danger} style={{ marginRight: 8 }} />
-                <Text className="font-bold text-base" style={{ color: C.danger }}>Delete Workspace</Text>
+              <TouchableOpacity onPress={handleDeleteWorkspace}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 14, marginBottom: 10, backgroundColor: T.dangerBg, borderWidth: 0.5, borderColor: T.dangerBorder }}>
+                <Ionicons name="trash-outline" size={16} color={T.danger} style={{ marginRight: 8 }} />
+                <Text style={{ fontWeight: "500", fontSize: 14, color: T.danger }}>Delete workspace</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity
-                onPress={handleLeaveWorkspace}
-                className="py-4 rounded-2xl items-center mb-4 flex-row justify-center border"
-                style={{ backgroundColor: C.dangerBg, borderColor: C.dangerBorder }}
-              >
-                <Ionicons name="log-out-outline" size={17} color={C.danger} style={{ marginRight: 8 }} />
-                <Text className="font-bold text-base" style={{ color: C.danger }}>Leave Workspace</Text>
+              <TouchableOpacity onPress={handleLeaveWorkspace}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 14, marginBottom: 10, backgroundColor: T.dangerBg, borderWidth: 0.5, borderColor: T.dangerBorder }}>
+                <Ionicons name="log-out-outline" size={16} color={T.danger} style={{ marginRight: 8 }} />
+                <Text style={{ fontWeight: "500", fontSize: 14, color: T.danger }}>Leave workspace</Text>
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity
-              onPress={() => setManageModalVisible(false)}
-              className="py-4 rounded-2xl items-center border"
-              style={{ backgroundColor: C.input, borderColor: C.inputBorder }}
-            >
-              <Text className="font-semibold text-base" style={{ color: C.textPrimary }}>Close</Text>
+            <TouchableOpacity onPress={() => setManageModalVisible(false)}
+              style={{ paddingVertical: 14, borderRadius: 14, alignItems: "center", backgroundColor: T.input, borderWidth: 0.5, borderColor: T.inputBorder }}>
+              <Text style={{ fontWeight: "500", fontSize: 14, color: T.textPrimary }}>Close</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* MODAL 3: User Profile Card */}
-      <Modal
-        visible={profileModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setProfileModalVisible(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setProfileModalVisible(false)}
-          className="flex-1 justify-center items-center px-6"
-          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            className="w-full rounded-3xl p-6 border"
-            style={{ backgroundColor: C.card, borderColor: C.cardBorder }}
-          >
-            {/* Header with avatar */}
-            <View className="items-center mb-6">
+
+      {/* ════════════════════════════════════════════════════════════════════
+          MODAL — User Profile Card
+      ════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={profileModalVisible} transparent animationType="fade" onRequestClose={() => setProfileModalVisible(false)}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setProfileModalVisible(false)}
+          style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20, backgroundColor: "rgba(0,0,0,0.7)" }}>
+          <TouchableOpacity activeOpacity={1}
+            style={{ width: "100%", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 24, padding: 20 }}>
+            {/* Avatar */}
+            <View style={{ alignItems: "center", marginBottom: 20 }}>
               {selectedUserForProfile?.avatarUrl ? (
-                <Image
-                  source={{ uri: selectedUserForProfile.avatarUrl }}
-                  className="w-20 h-20 rounded-full border-2 mb-3"
-                  style={{ borderColor: C.inputBorder }}
-                />
+                <Image source={{ uri: selectedUserForProfile.avatarUrl }}
+                  style={{ width: 76, height: 76, borderRadius: 38, borderWidth: 0.5, borderColor: T.cardBorder, marginBottom: 12 }} />
               ) : (
-                <View
-                  className="w-20 h-20 rounded-full items-center justify-center border-2 mb-3"
-                  style={{ backgroundColor: getAvatarColors(selectedUserForProfile?.username?.firstname || "").bg, borderColor: C.inputBorder }}
-                >
-                  <Text
-                    className="text-2xl font-bold"
-                    style={{ color: getAvatarColors(selectedUserForProfile?.username?.firstname || "").text }}
-                  >
+                <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: getAvatarColors(selectedUserForProfile?.username?.firstname || "").bg, alignItems: "center", justifyContent: "center", borderWidth: 0.5, borderColor: T.cardBorder, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 22, fontWeight: "500", color: getAvatarColors(selectedUserForProfile?.username?.firstname || "").text }}>
                     {selectedUserForProfile ? getInitials(selectedUserForProfile) : "?"}
                   </Text>
                 </View>
               )}
-              <Text className="text-xl font-bold" style={{ color: C.textPrimary }}>
-                {selectedUserForProfile ? getFullName(selectedUserForProfile) : "User Profile"}
-              </Text>
-              <Text className="text-sm mt-1" style={{ color: C.textSecondary }}>
-                {selectedUserForProfile?.email || ""}
-              </Text>
-
-              {/* Workspace Role Badge */}
+              <Text style={{ fontSize: 18, fontWeight: "600", color: T.textPrimary }}>{selectedUserForProfile ? getFullName(selectedUserForProfile) : "User Profile"}</Text>
+              <Text style={{ fontSize: 13, color: T.textSecondary, marginTop: 3 }}>{selectedUserForProfile?.email || ""}</Text>
               {selectedUserForProfile && (
-                <View className="px-3 py-1 rounded-full mt-3" style={{ backgroundColor: C.tagBg }}>
-                  <Text className="text-xs font-semibold capitalize" style={{ color: C.tagText }}>
+                <View style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginTop: 10, backgroundColor: `${T.accent}18` }}>
+                  <Text style={{ fontSize: 11, fontWeight: "500", color: T.accent, textTransform: "capitalize" }}>
                     {activeWorkspace?.members.find((m: any) => {
                       const mId = typeof m.user === "object" ? m.user._id : m.user;
                       return mId === selectedUserForProfile._id;
@@ -1601,14 +1275,14 @@ return (
               )}
             </View>
 
-            {/* Projects List */}
-            <View className="mb-6">
-              <Text className="text-xs font-semibold uppercase mb-3 tracking-wide" style={{ color: C.textSecondary }}>
-                Projects in Workspace ({selectedUserProjects.length})
+            {/* Projects list */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 11, fontWeight: "500", color: T.textSecondary, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+                Projects in workspace ({selectedUserProjects.length})
               </Text>
               <ScrollView style={{ maxHeight: 150 }} showsVerticalScrollIndicator={false}>
                 {selectedUserProjects.length === 0 ? (
-                  <Text className="text-xs" style={{ color: C.textMuted }}>Not assigned to any projects yet</Text>
+                  <Text style={{ fontSize: 12, color: T.textMuted }}>Not assigned to any projects yet</Text>
                 ) : (
                   selectedUserProjects.map((proj: any) => {
                     const userProjRole = proj.members.find((m: any) => {
@@ -1616,17 +1290,14 @@ return (
                       return mId === selectedUserForProfile?._id;
                     })?.role || "member";
                     return (
-                      <View
-                        key={proj._id}
-                        className="flex-row justify-between items-center p-3 rounded-xl mb-2 border"
-                        style={{ backgroundColor: C.bg, borderColor: C.cardBorder }}
-                      >
-                        <View className="flex-row items-center">
-                          <View className="w-2.5 h-2.5 rounded-full mr-2.5" style={{ backgroundColor: proj.color || themeColor }} />
-                          <Text className="text-sm font-semibold" style={{ color: C.textPrimary }}>{proj.name}</Text>
+                      <View key={proj._id}
+                        style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 10, borderRadius: 10, marginBottom: 6, backgroundColor: T.bg, borderWidth: 0.5, borderColor: T.cardBorder }}>
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, marginRight: 8, backgroundColor: proj.color || T.accent }} />
+                          <Text style={{ fontSize: 12, fontWeight: "500", color: T.textPrimary }}>{proj.name}</Text>
                         </View>
-                        <View className="px-2 py-0.5 rounded" style={{ backgroundColor: C.tagBg }}>
-                          <Text className="text-[10px] uppercase font-bold" style={{ color: C.tagText }}>{userProjRole}</Text>
+                        <View style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, backgroundColor: T.tagBg }}>
+                          <Text style={{ fontSize: 10, fontWeight: "500", textTransform: "uppercase", color: T.tagText }}>{userProjRole}</Text>
                         </View>
                       </View>
                     );
@@ -1635,17 +1306,14 @@ return (
               </ScrollView>
             </View>
 
-            {/* Close Button */}
-            <TouchableOpacity
-              onPress={() => setProfileModalVisible(false)}
-              className="w-full py-4 rounded-xl items-center border"
-              style={{ backgroundColor: C.input, borderColor: C.inputBorder }}
-            >
-              <Text className="font-semibold" style={{ color: C.textPrimary }}>Close</Text>
+            <TouchableOpacity onPress={() => setProfileModalVisible(false)}
+              style={{ width: "100%", paddingVertical: 13, borderRadius: 12, alignItems: "center", backgroundColor: T.input, borderWidth: 0.5, borderColor: T.inputBorder }}>
+              <Text style={{ fontWeight: "500", fontSize: 14, color: T.textPrimary }}>Close</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
     </SafeAreaView>
   );
 }

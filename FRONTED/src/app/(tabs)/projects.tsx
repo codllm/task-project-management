@@ -35,7 +35,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-const PROJECT_COLORS = ["#C2F193", "#95E0F9", "#E8D4F5", "#FED7AA", "#FFA3B1"];
+const PROJECT_COLORS = ["#5865F2", "#95E0F9", "#E8D4F5", "#FED7AA", "#FFA3B1"];
 
 const getUserId = (userField: any): string =>
   typeof userField === "object" && userField !== null ? userField._id : userField;
@@ -88,7 +88,7 @@ function Avatar({ userObj, size = 36 }: { userObj: any; size?: number }) {
 
 /* ─── Role badge ────────────────────────────────────────────── */
 function RolePill({ role, accent }: { role: string; accent?: string }) {
-  const color = role === "admin" ? (accent ?? "#C2F193") : "#4A4A6A";
+  const color = role === "admin" ? (accent ?? "#5865F2") : "#4A4A6A";
   return (
     <View style={{ backgroundColor: `${color}22`, borderColor: `${color}55`, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
       <Text style={{ color, fontSize: 9, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 }}>{role}</Text>
@@ -107,7 +107,7 @@ export default function ProjectsScreen() {
   const [createVisible, setCreateVisible] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [newColor, setNewColor] = useState("#C2F193");
+  const [newColor, setNewColor] = useState("#5865F2");
   const [creating, setCreating] = useState(false);
 
   /* ── manage modal ── */
@@ -260,7 +260,7 @@ export default function ProjectsScreen() {
         coverImageUrl: newCoverUrl || undefined,
       });
       if (res.success) {
-        setNewName(""); setNewDesc(""); setNewColor("#C2F193"); setNewCoverUrl("");
+        setNewName(""); setNewDesc(""); setNewColor("#5865F2"); setNewCoverUrl("");
         setCreateVisible(false);
         await refreshProjects();
       }
@@ -988,8 +988,8 @@ export default function ProjectsScreen() {
                                   height: 20,
                                   borderRadius: 6,
                                   borderWidth: 2,
-                                  borderColor: m.status === "completed" ? "#C2F193" : "#4A4A6A",
-                                  backgroundColor: m.status === "completed" ? "#C2F193" : "transparent",
+                                  borderColor: m.status === "completed" ? themeColor : "#4A4A6A",
+                                  backgroundColor: m.status === "completed" ? themeColor : "transparent",
                                   alignItems: "center",
                                   justifyContent: "center"
                                 }}

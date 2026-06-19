@@ -48,30 +48,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
-  const [themeColor, setThemeColorState] = useState<string>("#C2F193");
+  const [themeColor, setThemeColorState] = useState<string>("#5865F2");
   const [isDarkMode, setIsDarkModeState] = useState<boolean>(true);
+  // ── NEW: flips to true only after SecureStore bootstrap finishes,
+  //         so refreshData never fires before the token is loaded.
+  const [tokenReady, setTokenReady] = useState<boolean>(false);
 
   // Themes
   const darkTheme = {
     bg: "#15171C",
-    card: "#1C1F26",
-    cardBorder: "#2A2E38",
-    border: "#2A2E38",
-    cardUnread: "#1F232D",
-    divider: "#232730",
-    input: "#20242C",
-    inputBorder: "#2E333D",
-    textPrimary: "#FFFFFF",
-    textSecondary: "#9DA3AE",
-    textMuted: "#6B7280",
-    textLabel: "#7A86A0",
-    accent: "#6FC3D6",
-    onAccent: "#0D2A30",
-    danger: "#E2847A",
-    dangerBg: "rgba(216,99,74,0.12)",
-    dangerBorder: "rgba(216,99,74,0.25)",
-    tagBg: "#232730",
-    tagText: "#C8CDD6",
+    card: "#1D2027",
+    cardBorder: "#21242C",
+    border: "#21242C",
+    cardUnread: "#1E222A",
+    divider: "#21242C",
+    input: "#1D2027",
+    inputBorder: "#2A2D35",
+    textPrimary: "#E2E4EA",
+    textSecondary: "#6B7280",
+    textMuted: "#3D4049",
+    textLabel: "#6B7280",
+    accent: "#5865F2",
+    onAccent: "#E2E4EA",
+    danger: "#F04747",
+    dangerBg: "rgba(240, 71, 71, 0.07)",
+    dangerBorder: "rgba(240, 71, 71, 0.15)",
+    tagBg: "#21242C",
+    tagText: "#6B7280",
   };
 
   const lightTheme = {
@@ -160,12 +163,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error("AppContext: error during bootstrap:", err);
       } finally {
         setLoading(false);
+        // ── NEW: mark bootstrap done so the data-fetch effect can run
+        setTokenReady(true);
       }
     })();
   }, []);
 
-  // Fetch workspaces & notifications once logged in
+  // ── CHANGED: depend on tokenReady so this never fires before
+  //    SecureStore has been read and the token set in state.
   useEffect(() => {
+    if (!tokenReady) return;
     if (user && token) {
       refreshData();
     } else {
@@ -175,7 +182,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveProject(null);
       setUnreadCount(0);
     }
-  }, [user, token]);
+  }, [user, token, tokenReady]);
 
   const refreshData = async () => {
     if (!user) return;
@@ -272,7 +279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveWorkspaceState(workspace);
     setActiveProject(null);
     const storedTheme = await SecureStore.getItemAsync("themeColor");
-    setThemeColorState(storedTheme || "#C2F193");
+    setThemeColorState(storedTheme || "#5865F2");
     if (workspace) {
       await refreshProjects(workspace._id);
     } else {
@@ -286,7 +293,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setThemeColorState(project.color);
     } else {
       SecureStore.getItemAsync("themeColor").then((storedTheme) => {
-        setThemeColorState(storedTheme || "#C2F193");
+        setThemeColorState(storedTheme || "#5865F2");
       });
     }
   };

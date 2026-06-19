@@ -60,6 +60,7 @@ router.post("/update", [
 router.get('/forget-password', [
     body("email").isEmail().withMessage("Invalid email format").notEmpty(),
 ], forgetPass)
+
 router.get("/profile", userauth, profile);
 router.put("/preferences", userauth, updatePreferences);
 router.post("/logout", userauth, logout);

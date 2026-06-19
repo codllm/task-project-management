@@ -23,6 +23,7 @@ import { updateProfileApi, updatePreferencesApi, uploadAvatarApi } from "../../a
 const GENDERS = ["male", "female", "other"];
 
 const THEME_COLORS = [
+  { name: "Indigo", color: "#5865F2" },
   { name: "Lime", color: "#C2F193" },
   { name: "Blue", color: "#3A76E1" },
   { name: "Purple", color: "#E8D4F5" },
