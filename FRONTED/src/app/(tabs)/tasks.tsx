@@ -17,9 +17,12 @@ import {
   Share,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Keyboard,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
 import { useApp } from "../../context/AppContext";
 import {
   getProjectTasks,
@@ -923,6 +926,10 @@ const CalendarDatePickerModal: React.FC<CalendarDatePickerModalProps> = ({
   );
 };
 
+const generateImageName = (fileName?: string | null) => {
+  return fileName || `photo_${Date.now()}.jpg`;
+};
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function TasksScreen() {
   const router = useRouter();
@@ -963,6 +970,30 @@ export default function TasksScreen() {
   const [attachmentDescription, setAttachmentDescription] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      setIsKeyboardVisible(true);
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const handleBackdropPress = (closeModal: () => void) => {
+    if (isKeyboardVisible) {
+      Keyboard.dismiss();
+    } else {
+      closeModal();
+    }
+  };
 
   // Advanced feature views states
   const [activeView, setActiveView] = useState<"board" | "calendar" | "timeline" | "workload" | "bulk" | "trash">("board");
@@ -2133,12 +2164,9 @@ export default function TasksScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 0.8 });
       if (!result.canceled && result.assets?.[0]) {
         const a = result.assets[0];
-        setPendingAttachment({
-          uri: a.uri,
-          name: a.fileName || `photo_${Date.now()}.jpg`,
-          mimeType: "image/jpeg",
-        });
-        setAttachmentDescription("");
+        const fileName = generateImageName(a.fileName);
+        const mimeType = a.mimeType || "image/jpeg";
+        await handleUpload(a.uri, fileName, mimeType);
       }
     } catch (err) {
       console.error("Image pick error:", err);
@@ -2150,12 +2178,9 @@ export default function TasksScreen() {
       const result = await DocumentPicker.getDocumentAsync({ type: ["application/pdf", "image/*"], copyToCacheDirectory: true });
       if (!result.canceled && result.assets?.[0]) {
         const a = result.assets[0];
-        setPendingAttachment({
-          uri: a.uri,
-          name: a.name || "document.pdf",
-          mimeType: a.mimeType || "application/octet-stream",
-        });
-        setAttachmentDescription("");
+        const name = a.name || "document.pdf";
+        const mimeType = a.mimeType || "application/octet-stream";
+        await handleUpload(a.uri, name, mimeType);
       }
     } catch (err) {
       console.error("Document pick error:", err);
@@ -3053,63 +3078,66 @@ export default function TasksScreen() {
       )}
       {/* ── Modal: CSV Import ─────────────────────────────────────────────── */}
       <Modal visible={importModalVisible} transparent animationType="fade" onRequestClose={() => setImportModalVisible(false)}>
-        <View style={s.modalOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setImportModalVisible(false)} />
-          <View style={s.createModal}>
-            <Text style={s.modalTitle}>Import tasks via CSV</Text>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.flex}>
+          <View style={s.modalOverlay}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => handleBackdropPress(() => setImportModalVisible(false))} />
+            <View style={s.createModal}>
+              <Text style={s.modalTitle}>Import tasks via CSV</Text>
 
-            <Text style={[s.bodyMuted, { marginBottom: 12, fontSize: 12 }]}>
-              Paste CSV content below. The header row should match:{"\n"}
-              <Text style={{ fontWeight: "700", color: C.accent }}>
-                Title,Description,Status,Priority,Due Date,Start Date,Estimated Hours
+              <Text style={[s.bodyMuted, { marginBottom: 12, fontSize: 12 }]}>
+                Paste CSV content below. The header row should match:{"\n"}
+                <Text style={{ fontWeight: "700", color: C.accent }}>
+                  Title,Description,Status,Priority,Due Date,Start Date,Estimated Hours
+                </Text>
               </Text>
-            </Text>
 
-            <View style={[s.inputWrap, s.inputMultiline, { marginBottom: 20 }]}>
-              <TextInput
-                style={[s.input, { minHeight: 150, textAlignVertical: "top" }]}
-                placeholder={"Title,Description,Status,Priority,Due Date,Start Date,Estimated Hours\nImplement UI,Create beautiful user screens,in-progress,high,2026-06-20,2026-06-17,8"}
-                placeholderTextColor={C.textMuted}
-                value={csvInputText}
-                onChangeText={setCsvInputText}
-                multiline
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
+              <View style={[s.inputWrap, s.inputMultiline, { marginBottom: 20 }]}>
+                <TextInput
+                  style={[s.input, { minHeight: 150, textAlignVertical: "top" }]}
+                  placeholder={"Title,Description,Status,Priority,Due Date,Start Date,Estimated Hours\nImplement UI,Create beautiful user screens,in-progress,high,2026-06-20,2026-06-17,8"}
+                  placeholderTextColor={C.textMuted}
+                  value={csvInputText}
+                  onChangeText={setCsvInputText}
+                  multiline
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
 
-            <View style={[s.row, { gap: 10 }]}>
-              <TouchableOpacity style={[s.flex, s.secondaryBtn]} onPress={() => setImportModalVisible(false)}>
-                <Text style={s.secondaryBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.flex, s.primaryBtn]}
-                onPress={async () => {
-                  if (!csvInputText.trim()) {
-                    Alert.alert("Empty Input", "Please paste CSV content.");
-                    return;
-                  }
-                  try {
-                    await handleImportCSV(csvInputText);
-                    setCsvInputText("");
-                    setImportModalVisible(false);
-                  } catch (err) {
-                    console.error(err);
-                  }
-                }}
-              >
-                <Text style={s.primaryBtnText}>Import</Text>
-              </TouchableOpacity>
+              <View style={[s.row, { gap: 10 }]}>
+                <TouchableOpacity style={[s.flex, s.secondaryBtn]} onPress={() => setImportModalVisible(false)}>
+                  <Text style={s.secondaryBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.flex, s.primaryBtn]}
+                  onPress={async () => {
+                    if (!csvInputText.trim()) {
+                      Alert.alert("Empty Input", "Please paste CSV content.");
+                      return;
+                    }
+                    try {
+                      await handleImportCSV(csvInputText);
+                      setCsvInputText("");
+                      setImportModalVisible(false);
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                >
+                  <Text style={s.primaryBtnText}>Import</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Modal: Create task ─────────────────────────────────────────────── */}
       <Modal visible={createModalVisible} transparent animationType="fade" onRequestClose={() => setCreateModalVisible(false)}>
-        <View style={s.modalOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setCreateModalVisible(false)} />
-          <View style={s.createModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.flex}>
+          <View style={s.modalOverlay}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => handleBackdropPress(() => setCreateModalVisible(false))} />
+            <View style={s.createModal}>
             <Text style={s.modalTitle}>New task</Text>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
@@ -3308,12 +3336,14 @@ export default function TasksScreen() {
           onChange={setStartDate}
           title="Select Start Date"
         />
+        </KeyboardAvoidingView>
       </Modal>
       {/* ── Modal: Task detail ─────────────────────────────────────────────── */}
       <Modal visible={detailModalVisible} transparent animationType="slide" onRequestClose={() => setDetailModalVisible(false)}>
-        <View style={s.detailOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setDetailModalVisible(false)} />
-          <View style={s.detailPanel}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.flex}>
+          <View style={s.detailOverlay}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => handleBackdropPress(() => setDetailModalVisible(false))} />
+            <View style={s.detailPanel}>
             <View style={s.dragHandle} />
 
             {selectedTask && (
@@ -3945,6 +3975,7 @@ export default function TasksScreen() {
             />
           </>
         )}
+        </KeyboardAvoidingView>
       </Modal>
       {/* ── Modal: Attachment Preview ────────────────────────────────────── */}
       <Modal visible={previewAttachment !== null} transparent animationType="fade" onRequestClose={() => setPreviewAttachment(null)}>
@@ -4193,9 +4224,10 @@ export default function TasksScreen() {
 
       {/* ── Modal: Focused Comments ─────────────────────────────────────────── */}
       <Modal visible={commentsModalVisible} transparent animationType="slide" onRequestClose={() => setCommentsModalVisible(false)}>
-        <View style={s.detailOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setCommentsModalVisible(false)} />
-          <View style={[s.detailPanel, { maxHeight: "80%" }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.flex}>
+          <View style={s.detailOverlay}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => handleBackdropPress(() => setCommentsModalVisible(false))} />
+            <View style={[s.detailPanel, { maxHeight: "80%" }]}>
             <View style={s.dragHandle} />
             {selectedTask && (
               <View>
@@ -4348,13 +4380,15 @@ export default function TasksScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Modal: Focused Attachments ──────────────────────────────────────── */}
       <Modal visible={attachmentsModalVisible} transparent animationType="slide" onRequestClose={() => setAttachmentsModalVisible(false)}>
-        <View style={s.detailOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setAttachmentsModalVisible(false)} />
-          <View style={[s.detailPanel, { maxHeight: "80%" }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.flex}>
+          <View style={s.detailOverlay}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => handleBackdropPress(() => setAttachmentsModalVisible(false))} />
+            <View style={[s.detailPanel, { maxHeight: "80%" }]}>
             <View style={s.dragHandle} />
             {selectedTask && (
               <View>
@@ -4373,7 +4407,7 @@ export default function TasksScreen() {
                   {selectedTask.attachments && selectedTask.attachments.length > 0 ? (
                     <View style={{ marginBottom: 12 }}>
                       {selectedTask.attachments.map((att, idx) => {
-                        const isImage = att.fileType.startsWith("image/") || /\.(jpg|jpeg|png|gif)$/i.test(att.name);
+                        const isImage = att.fileType?.startsWith("image/") || (att.name && /\.(jpg|jpeg|png|gif)$/i.test(att.name));
                         return (
                           <TouchableOpacity key={idx} onPress={() => att.url && setPreviewAttachment(att)} style={s.attachmentRow}>
                             {isImage ? (
@@ -4423,6 +4457,7 @@ export default function TasksScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
