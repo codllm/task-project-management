@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
@@ -31,6 +32,8 @@ import { getProjectTasks, Task } from "../../api/task.api";
 import { searchUsers, SearchUserResult } from "../../api/search.api";
 import { addMemberToWorkspace } from "../../api/workspace.api";
 import { uploadFile } from "../../api/upload.api";
+import { ConfirmDialog, ConfirmDialogAction } from "../../components/ConfirmDialog";
+import { createUploadFormData } from "../../utils/uploadFormData";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -182,6 +185,11 @@ export default function ProjectsScreen() {
   const [newMilestoneTitle, setNewMilestoneTitle] = useState("");
   const [newMilestoneDesc, setNewMilestoneDesc] = useState("");
   const [creatingMilestone, setCreatingMilestone] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message?: string;
+    actions: ConfirmDialogAction[];
+  } | null>(null);
 
   useEffect(() => {
     if (selProject) {
@@ -305,8 +313,11 @@ export default function ProjectsScreen() {
       if (!result.canceled && result.assets?.[0]) {
         setUploadingCover(true);
         const asset = result.assets[0];
-        const formData = new FormData();
-        formData.append("file", { uri: Platform.OS === "ios" ? asset.uri.replace("file://", "") : asset.uri, name: asset.fileName || `cover_${Date.now()}.jpg`, type: "image/jpeg" } as any);
+        const formData = await createUploadFormData({
+          uri: asset.uri,
+          name: asset.fileName || `cover_${Date.now()}.jpg`,
+          type: asset.mimeType || "image/jpeg",
+        });
         const uploadRes = await uploadFile(formData);
         if (uploadRes.success) {
           if (isNewProject) {
@@ -358,15 +369,23 @@ export default function ProjectsScreen() {
   };
 
   async function handleDelete(projectId: string) {
-    Alert.alert("Delete Project", "Permanently delete this project and all its tasks?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => {
-        try {
-          const res = await deleteProject(projectId);
-          if (res.success) { closeManage(); await refreshProjects(); }
-        } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed."); }
-      }},
-    ]);
+    setConfirmDialog({
+      title: "Delete Project",
+      message: "Permanently delete this project and all its tasks?",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await deleteProject(projectId);
+              if (res.success) { closeManage(); await refreshProjects(); }
+            } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed."); }
+          },
+        },
+      ],
+    });
   }
 
   async function handleAddWsMember(memberId: string) {
@@ -382,60 +401,86 @@ export default function ProjectsScreen() {
 
   async function handleRemove(memberId: string) {
     if (!selProject) return;
-    Alert.alert("Remove Member", "Remove this member from the project?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: async () => {
-        setRemovingId(memberId);
-        try {
-          const res = await removeMemberFromProject(selProject._id, memberId);
-          if (res.success) { setSelProject(res.project); await refreshProjects(); }
-          else Alert.alert("Error", "Could not remove member.");
-        } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed."); }
-        finally { setRemovingId(null); }
-      }},
-    ]);
+    const projectId = selProject._id;
+    setConfirmDialog({
+      title: "Remove Member",
+      message: "Remove this member from the project?",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            setRemovingId(memberId);
+            try {
+              const res = await removeMemberFromProject(projectId, memberId);
+              if (res.success) { setSelProject(res.project); await refreshProjects(); }
+              else Alert.alert("Error", "Could not remove member.");
+            } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed."); }
+            finally { setRemovingId(null); }
+          },
+        },
+      ],
+    });
   }
 
   async function handleRoleToggle(memberId: string, currentRole: string) {
     if (!selProject) return;
     const newRole = currentRole === "admin" ? "member" : "admin";
-    Alert.alert("Change Role", `${newRole === "admin" ? "Promote to Admin" : "Demote to Member"}?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Confirm", onPress: async () => {
-        setRoleId(memberId);
-        try {
-          const res = await changeProjectRole(selProject._id, memberId, newRole);
-          if (res.success) { setSelProject(res.project); await refreshProjects(); }
-          else Alert.alert("Error", "Could not change role.");
-        } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed."); }
-        finally { setRoleId(null); }
-      }},
-    ]);
+    const projectId = selProject._id;
+    setConfirmDialog({
+      title: "Change Role",
+      message: `${newRole === "admin" ? "Promote to Admin" : "Demote to Member"}?`,
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          onPress: async () => {
+            setRoleId(memberId);
+            try {
+              const res = await changeProjectRole(projectId, memberId, newRole);
+              if (res.success) { setSelProject(res.project); await refreshProjects(); }
+              else Alert.alert("Error", "Could not change role.");
+            } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed."); }
+            finally { setRoleId(null); }
+          },
+        },
+      ],
+    });
   }
 
   async function handleInviteAndAdd(targetUser: SearchUserResult) {
     if (!activeWorkspace || !selProject) return;
-    Alert.alert("Invite & Add", `Add ${getFullName({ username: targetUser.username })} to workspace and project?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Invite & Add", onPress: async () => {
-        setInviteId(targetUser._id);
-        try {
-          const inv = await addMemberToWorkspace(activeWorkspace._id, targetUser._id);
-          if (!inv.success) throw new Error("Workspace invite failed");
-          const add = await addMemberToProject(selProject._id, targetUser._id);
-          if (add.success) {
-            setSelProject(add.project);
-            setQuery(""); setGlobalResults([]);
-            await refreshWorkspaces(); await refreshProjects();
-            Alert.alert("Done", "Workspace invitation sent and user added to project.");
-          } else {
-            Alert.alert("Partial", "Added to workspace but failed to add to project.");
-            await refreshWorkspaces();
-          }
-        } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Something went wrong."); }
-        finally { setInviteId(null); }
-      }},
-    ]);
+    const workspaceId = activeWorkspace._id;
+    const projectId = selProject._id;
+    setConfirmDialog({
+      title: "Invite & Add",
+      message: `Add ${getFullName({ username: targetUser.username })} to workspace and project?`,
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Invite & Add",
+          onPress: async () => {
+            setInviteId(targetUser._id);
+            try {
+              const inv = await addMemberToWorkspace(workspaceId, targetUser._id);
+              if (!inv.success) throw new Error("Workspace invite failed");
+              const add = await addMemberToProject(projectId, targetUser._id);
+              if (add.success) {
+                setSelProject(add.project);
+                setQuery(""); setGlobalResults([]);
+                await refreshWorkspaces(); await refreshProjects();
+                Alert.alert("Done", "Workspace invitation sent and user added to project.");
+              } else {
+                Alert.alert("Partial", "Added to workspace but failed to add to project.");
+                await refreshWorkspaces();
+              }
+            } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Something went wrong."); }
+            finally { setInviteId(null); }
+          },
+        },
+      ],
+    });
   }
 
   /* ══ NO WORKSPACE STATE ═══════════════════════════════════════ */
@@ -591,8 +636,9 @@ export default function ProjectsScreen() {
       ══════════════════════════════════════════════════════════ */}
       <Modal visible={createVisible} transparent animationType="slide" onRequestClose={() => setCreateVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <TouchableOpacity activeOpacity={1} onPress={() => setCreateVisible(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
-            <TouchableOpacity activeOpacity={1} style={{ backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderTopWidth: 1, borderTopColor: C.cardBorder, padding: 22, paddingBottom: 42 }}>
+          <View style={{ flex: 1, justifyContent: "flex-end" }}>
+            <Pressable onPress={() => setCreateVisible(false)} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.65)" }} />
+            <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderTopWidth: 1, borderTopColor: C.cardBorder, padding: 22, paddingBottom: 42 }}>
               <View style={{ width: 36, height: 4, backgroundColor: C.border, borderRadius: 2, alignSelf: "center", marginBottom: 20 }} />
               <Text style={{ color: C.textPrimary, fontSize: 18, fontWeight: "700", marginBottom: 20 }}>Create new project</Text>
 
@@ -642,8 +688,8 @@ export default function ProjectsScreen() {
                   {creating ? <ActivityIndicator color={C.onAccent} /> : <Text style={{ color: C.onAccent, fontWeight: "700", fontSize: 15 }}>Create Project</Text>}
                 </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -1003,8 +1049,9 @@ export default function ProjectsScreen() {
           MODAL 3 ── USER PROFILE
       ══════════════════════════════════════════════════════════ */}
       <Modal visible={profileVisible} transparent animationType="fade" onRequestClose={() => setProfileVisible(false)}>
-        <TouchableOpacity activeOpacity={1} onPress={() => setProfileVisible(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 }}>
-          <TouchableOpacity activeOpacity={1} style={{ width: "100%", backgroundColor: C.surface, borderRadius: 22, padding: 22, borderWidth: 1, borderColor: C.cardBorder }}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 }}>
+          <Pressable onPress={() => setProfileVisible(false)} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.65)" }} />
+          <View style={{ width: "100%", backgroundColor: C.surface, borderRadius: 22, padding: 22, borderWidth: 1, borderColor: C.cardBorder }}>
             <View style={{ alignItems: "center", marginBottom: 18 }}>
               {profileUser && <Avatar userObj={profileUser} size={68} />}
               <Text style={{ color: C.textPrimary, fontSize: 18, fontWeight: "700", marginTop: 12 }}>{profileUser ? getFullName(profileUser) : "User"}</Text>
@@ -1041,9 +1088,30 @@ export default function ProjectsScreen() {
             <TouchableOpacity onPress={() => setProfileVisible(false)} style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingVertical: 14, borderRadius: 13, alignItems: "center", marginTop: 16 }}>
               <Text style={{ color: C.textSecondary, fontWeight: "700" }}>Close</Text>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={!!confirmDialog}
+        title={confirmDialog?.title || ""}
+        message={confirmDialog?.message}
+        actions={confirmDialog?.actions || []}
+        onClose={() => setConfirmDialog(null)}
+        colors={{
+          surface: C.surface,
+          border: C.cardBorder,
+          textPrimary: C.textPrimary,
+          textSecondary: C.textSecondary,
+          muted: C.textMuted,
+          accent: themeColor,
+          onAccent: C.onAccent,
+          danger: C.danger,
+          dangerBg: C.dangerBg,
+          dangerBorder: C.dangerBorder,
+          input: C.card,
+        }}
+      />
 
     </SafeAreaView>
   );

@@ -10,10 +10,6 @@ export interface UploadResponse {
 export const uploadFile = async (
   formData: FormData
 ): Promise<UploadResponse> => {
-  const res = await api.post("/api/upload", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const res = await api.post("/api/upload", formData);
   return res.data;
 };

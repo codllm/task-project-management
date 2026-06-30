@@ -9,7 +9,7 @@ import {
   Alert,
   Image,
   Modal,
-  Platform,
+  Pressable,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
@@ -27,6 +27,8 @@ import { searchUsers, SearchUserResult, globalSearch } from "../../api/search.ap
 import { getWorkspaceActivities } from "../../api/activity.api";
 import { getWorkspaceAnalytics } from "../../api/project.api";
 import { uploadFile } from "../../api/upload.api";
+import { ConfirmDialog, ConfirmDialogAction } from "../../components/ConfirmDialog";
+import { createUploadFormData } from "../../utils/uploadFormData";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -135,6 +137,11 @@ export default function HomeScreen() {
 
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<any | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message?: string;
+    actions: ConfirmDialogAction[];
+  } | null>(null);
 
   // ─── All original helper functions unchanged ────────────────────────────────
   const getInitials = (userObj: any): string => {
@@ -327,12 +334,11 @@ export default function HomeScreen() {
       if (!result.canceled && result.assets?.[0]) {
         setUploadingLogo(true);
         const asset = result.assets[0];
-        const formData = new FormData();
-        formData.append("file", {
-          uri: Platform.OS === "ios" ? asset.uri.replace("file://", "") : asset.uri,
+        const formData = await createUploadFormData({
+          uri: asset.uri,
           name: asset.fileName || `logo_${Date.now()}.jpg`,
-          type: "image/jpeg",
-        } as any);
+          type: asset.mimeType || "image/jpeg",
+        });
         const uploadRes = await uploadFile(formData);
         if (uploadRes.success) {
           const updateRes = await updateWorkspace(activeWorkspace._id, { logoUrl: uploadRes.url });
@@ -383,59 +389,73 @@ export default function HomeScreen() {
 
   const handleInviteUser = async (targetUserId: string) => {
     if (!activeWorkspace) return;
-    Alert.alert("Add Workspace Member", "Are you sure you want to add this user to the workspace?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Add Member",
-        onPress: async () => {
-          setInvitingUserId(targetUserId);
-          try {
-            const res = await addMemberToWorkspace(activeWorkspace._id, targetUserId);
-            if (res.success) {
-              Alert.alert("Success", "Workspace invitation sent successfully!");
-              setSearchQuery("");
-              setSearchResults([]);
-              await refreshWorkspaces();
+    const workspaceId = activeWorkspace._id;
+    setConfirmDialog({
+      title: "Add Workspace Member",
+      message: "Are you sure you want to add this user to the workspace?",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add Member",
+          onPress: async () => {
+            setInvitingUserId(targetUserId);
+            try {
+              const res = await addMemberToWorkspace(workspaceId, targetUserId);
+              if (res.success) {
+                Alert.alert("Success", "Workspace invitation sent successfully!");
+                setSearchQuery("");
+                setSearchResults([]);
+                await refreshWorkspaces();
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err?.response?.data?.message || "Failed to add member.");
+            } finally {
+              setInvitingUserId(null);
             }
-          } catch (err: any) {
-            Alert.alert("Error", err?.response?.data?.message || "Failed to add member.");
-          } finally {
-            setInvitingUserId(null);
-          }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const handleRemoveMember = async (targetUserId: string) => {
     if (!activeWorkspace) return;
-    Alert.alert("Remove Member", "Are you sure you want to remove this user?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const res = await removeMemberFromWorkspace(activeWorkspace._id, targetUserId);
-            if (res.success) {
-              Alert.alert("Success", "Member removed successfully.");
-              await refreshWorkspaces();
+    const workspaceId = activeWorkspace._id;
+    setConfirmDialog({
+      title: "Remove Member",
+      message: "Are you sure you want to remove this user?",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await removeMemberFromWorkspace(workspaceId, targetUserId);
+              if (res.success) {
+                Alert.alert("Success", "Member removed successfully.");
+                await refreshWorkspaces();
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err?.response?.data?.message || "Failed to remove member.");
             }
-          } catch (err: any) {
-            Alert.alert("Error", err?.response?.data?.message || "Failed to remove member.");
-          }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const handleChangeRole = async (targetUserId: string, currentRole: string) => {
     if (!activeWorkspace) return;
-    Alert.alert("Change Member Role", "Select the new workspace role for this member:", [
-      { text: "Admin",  onPress: async () => await updateWorkspaceMemberRole(targetUserId, "admin") },
-      { text: "Member", onPress: async () => await updateWorkspaceMemberRole(targetUserId, "member") },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setConfirmDialog({
+      title: "Change Member Role",
+      message: "Select the new workspace role for this member.",
+      actions: [
+        { text: "Admin", onPress: async () => await updateWorkspaceMemberRole(targetUserId, "admin") },
+        { text: "Member", onPress: async () => await updateWorkspaceMemberRole(targetUserId, "member") },
+        { text: "Cancel", style: "cancel" },
+      ],
+    });
   };
 
   const updateWorkspaceMemberRole = async (targetUserId: string, role: "admin" | "member") => {
@@ -453,40 +473,46 @@ export default function HomeScreen() {
 
   const handleLeaveWorkspace = () => {
     if (!activeWorkspace) return;
-    Alert.alert("Leave Workspace", "Are you sure you want to leave this workspace?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Leave",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const res = await leaveWorkspace(activeWorkspace._id);
-            if (res.success) {
-              Alert.alert("Success", "You have left the workspace.");
-              await refreshWorkspaces();
-              setManageModalVisible(false);
+    const workspaceId = activeWorkspace._id;
+    setConfirmDialog({
+      title: "Leave Workspace",
+      message: "Are you sure you want to leave this workspace?",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await leaveWorkspace(workspaceId);
+              if (res.success) {
+                Alert.alert("Success", "You have left the workspace.");
+                await refreshWorkspaces();
+                setManageModalVisible(false);
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err?.response?.data?.message || "Failed to leave workspace.");
             }
-          } catch (err: any) {
-            Alert.alert("Error", err?.response?.data?.message || "Failed to leave workspace.");
-          }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const handleDeleteWorkspace = () => {
     if (!activeWorkspace) return;
-    Alert.alert(
-      "Delete Workspace",
-      "CRITICAL: This will delete the workspace, all its projects, and tasks permanently. Proceed?",
-      [
+    const workspaceId = activeWorkspace._id;
+    setConfirmDialog({
+      title: "Delete Workspace",
+      message: "CRITICAL: This will delete the workspace, all its projects, and tasks permanently. Proceed?",
+      actions: [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete permanently",
           style: "destructive",
           onPress: async () => {
             try {
-              const res = await deleteWorkspace(activeWorkspace._id);
+              const res = await deleteWorkspace(workspaceId);
               if (res.success) {
                 Alert.alert("Deleted", "Workspace deleted successfully.");
                 await refreshWorkspaces();
@@ -497,8 +523,8 @@ export default function HomeScreen() {
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const getWorkspaceOwnerId = (ws: any) => {
@@ -1129,8 +1155,8 @@ export default function HomeScreen() {
           MODAL — Workspace Selector
       ════════════════════════════════════════════════════════════════════ */}
       <Modal visible={workspaceMenuVisible} transparent animationType="fade" onRequestClose={() => setWorkspaceMenuVisible(false)}>
-        <TouchableOpacity activeOpacity={1} onPress={() => setWorkspaceMenuVisible(false)}
-          style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20, backgroundColor: "rgba(0,0,0,0.7)" }}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 }}>
+          <Pressable onPress={() => setWorkspaceMenuVisible(false)} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.7)" }} />
           <View style={{ width: "100%", maxHeight: "80%", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 24, padding: 20 }}>
             <Text style={{ fontSize: 18, fontWeight: "600", color: T.textPrimary, marginBottom: 16 }}>Switch workspace</Text>
             <ScrollView style={{ marginBottom: 14 }}>
@@ -1162,7 +1188,7 @@ export default function HomeScreen() {
               <Text style={{ fontWeight: "600", fontSize: 14, color: T.onAccent }}>Create workspace</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
 
@@ -1170,8 +1196,8 @@ export default function HomeScreen() {
           MODAL — Workspace Settings
       ════════════════════════════════════════════════════════════════════ */}
       <Modal visible={manageModalVisible} transparent animationType="slide" onRequestClose={() => setManageModalVisible(false)}>
-        <TouchableOpacity activeOpacity={1} onPress={() => setManageModalVisible(false)}
-          style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.7)" }}>
+        <View style={{ flex: 1, justifyContent: "flex-end" }}>
+          <Pressable onPress={() => setManageModalVisible(false)} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.7)" }} />
           <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36, borderTopWidth: 0.5, borderTopColor: T.cardBorder }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: T.input, alignSelf: "center", marginBottom: 20 }} />
             <Text style={{ fontSize: 18, fontWeight: "600", color: T.textPrimary, marginBottom: 6 }}>Workspace settings</Text>
@@ -1208,7 +1234,7 @@ export default function HomeScreen() {
               <Text style={{ fontWeight: "500", fontSize: 14, color: T.textPrimary }}>Close</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
 
@@ -1216,10 +1242,9 @@ export default function HomeScreen() {
           MODAL — User Profile Card
       ════════════════════════════════════════════════════════════════════ */}
       <Modal visible={profileModalVisible} transparent animationType="fade" onRequestClose={() => setProfileModalVisible(false)}>
-        <TouchableOpacity activeOpacity={1} onPress={() => setProfileModalVisible(false)}
-          style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20, backgroundColor: "rgba(0,0,0,0.7)" }}>
-          <TouchableOpacity activeOpacity={1}
-            style={{ width: "100%", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 24, padding: 20 }}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 }}>
+          <Pressable onPress={() => setProfileModalVisible(false)} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.7)" }} />
+          <View style={{ width: "100%", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 24, padding: 20 }}>
             {/* Avatar */}
             <View style={{ alignItems: "center", marginBottom: 20 }}>
               {selectedUserForProfile?.avatarUrl ? (
@@ -1281,9 +1306,30 @@ export default function HomeScreen() {
               style={{ width: "100%", paddingVertical: 13, borderRadius: 12, alignItems: "center", backgroundColor: T.input, borderWidth: 0.5, borderColor: T.inputBorder }}>
               <Text style={{ fontWeight: "500", fontSize: 14, color: T.textPrimary }}>Close</Text>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={!!confirmDialog}
+        title={confirmDialog?.title || ""}
+        message={confirmDialog?.message}
+        actions={confirmDialog?.actions || []}
+        onClose={() => setConfirmDialog(null)}
+        colors={{
+          surface: T.card,
+          border: T.cardBorder,
+          textPrimary: T.textPrimary,
+          textSecondary: T.textSecondary,
+          muted: T.textMuted,
+          accent: T.accent,
+          onAccent: T.onAccent,
+          danger: T.danger,
+          dangerBg: T.dangerBg,
+          dangerBorder: T.dangerBorder,
+          input: T.input,
+        }}
+      />
 
     </SafeAreaView>
   );

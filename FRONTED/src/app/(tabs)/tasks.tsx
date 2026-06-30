@@ -72,6 +72,8 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { uploadFile } from "../../api/upload.api";
+import { ConfirmDialog, ConfirmDialogAction } from "../../components/ConfirmDialog";
+import { createUploadFormData } from "../../utils/uploadFormData";
 import { useRouter } from "expo-router";
 import { TodoModeTasksView } from "../../Screen/TodoMode";
 
@@ -1003,6 +1005,11 @@ export default function TasksScreen() {
   const [undoTask, setUndoTask] = useState<Task | null>(null);
   const [showUndoBanner, setShowUndoBanner] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message?: string;
+    actions: ConfirmDialogAction[];
+  } | null>(null);
 
   // Time logging and Start date states
   const [estimatedHours, setEstimatedHours] = useState("0");
@@ -1728,33 +1735,37 @@ export default function TasksScreen() {
   };
 
   const handleDeleteTask = (taskId: string) => {
-    Alert.alert("Delete task", "Soft-delete this task? You can restore it from the Trash Bin or undo this action now.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const taskToDelete = tasks.find((t) => t._id === taskId);
-            const res = await deleteTask(taskId);
-            if (res.success) {
-              setDetailModalVisible(false);
-              setSelectedTask(null);
-              if (taskToDelete) {
-                setUndoTask(taskToDelete);
-                setShowUndoBanner(true);
-                setTimeout(() => {
-                  setShowUndoBanner(false);
-                }, 5000);
+    setConfirmDialog({
+      title: "Delete task",
+      message: "Soft-delete this task? You can restore it from the Trash Bin or undo this action now.",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const taskToDelete = tasks.find((t) => t._id === taskId);
+              const res = await deleteTask(taskId);
+              if (res.success) {
+                setDetailModalVisible(false);
+                setSelectedTask(null);
+                if (taskToDelete) {
+                  setUndoTask(taskToDelete);
+                  setShowUndoBanner(true);
+                  setTimeout(() => {
+                    setShowUndoBanner(false);
+                  }, 5000);
+                }
+                await loadTasks();
               }
-              await loadTasks();
+            } catch (err: any) {
+              Alert.alert("Error", err?.response?.data?.message || "Failed to delete task.");
             }
-          } catch (err: any) {
-            Alert.alert("Error", err?.response?.data?.message || "Failed to delete task.");
-          }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const handleUndoDelete = async () => {
@@ -1800,23 +1811,27 @@ export default function TasksScreen() {
   };
 
   const handlePermanentDeleteTask = async (taskId: string) => {
-    Alert.alert("Permanently delete task", "This action is irreversible. The task and all associated comments will be permanently erased.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete permanently",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const res = await deleteTaskPermanently(taskId);
-            if (res.success) {
-              await loadTrashTasks();
+    setConfirmDialog({
+      title: "Permanently delete task",
+      message: "This action is irreversible. The task and all associated comments will be permanently erased.",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete permanently",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await deleteTaskPermanently(taskId);
+              if (res.success) {
+                await loadTrashTasks();
+              }
+            } catch (err) {
+              console.error("Failed to delete permanently:", err);
             }
-          } catch (err) {
-            console.error("Failed to delete permanently:", err);
-          }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const handleBulkUpdate = async (updates: any) => {
@@ -2191,8 +2206,7 @@ export default function TasksScreen() {
     if (!selectedTask) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", { uri: Platform.OS === "ios" ? uri.replace("file://", "") : uri, name, type: mimeType } as any);
+      const formData = await createUploadFormData({ uri, name, type: mimeType });
       const res = await uploadFile(formData);
       if (res.success) {
         const updateRes = await updateTask(selectedTask._id, {
@@ -2773,10 +2787,14 @@ export default function TasksScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
-                    Alert.alert("Bulk delete", `Move ${selectedTasks.length} tasks to Trash Bin?`, [
-                      { text: "Cancel", style: "cancel" },
-                      { text: "Delete", style: "destructive", onPress: () => handleBulkUpdate({ isDeleted: true }) },
-                    ]);
+                    setConfirmDialog({
+                      title: "Bulk delete",
+                      message: `Move ${selectedTasks.length} tasks to Trash Bin?`,
+                      actions: [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Delete", style: "destructive", onPress: () => handleBulkUpdate({ isDeleted: true }) },
+                      ],
+                    });
                   }}
                   style={s.bulkActionItem}
                 >
@@ -4459,6 +4477,27 @@ export default function TasksScreen() {
         </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmDialog
+        visible={!!confirmDialog}
+        title={confirmDialog?.title || ""}
+        message={confirmDialog?.message}
+        actions={confirmDialog?.actions || []}
+        onClose={() => setConfirmDialog(null)}
+        colors={{
+          surface: C.surface,
+          border: C.border,
+          textPrimary: C.textPrimary,
+          textSecondary: C.textSecondary,
+          muted: C.textMuted,
+          accent: C.accent,
+          onAccent: C.onAccent,
+          danger: C.danger,
+          dangerBg: C.dangerBg,
+          dangerBorder: C.dangerBorder,
+          input: C.card,
+        }}
+      />
     </SafeAreaView>
   );
 }
