@@ -7,7 +7,6 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.4:5137";
 const api = axios.create({
   baseURL: BASE_URL,
   withCredentials: true,
-  headers: { "Content-Type": "application/json" },
 });
 
 // Attach token from storage to every request
@@ -136,11 +135,7 @@ export const getPinnedItemsApi = async (): Promise<{ success: boolean; pinnedPro
 
 // Profile avatar and saved filters endpoints
 export const uploadAvatarApi = async (formData: FormData): Promise<{ success: boolean; avatarUrl: string; user: any }> => {
-  const res = await api.put("/api/users/profile/avatar", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const res = await api.put("/api/users/profile/avatar", formData);
   return res.data;
 };
 

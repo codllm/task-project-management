@@ -21,6 +21,7 @@ textarea,
 [contenteditable="true"] {
   outline: none;
   box-shadow: none;
+  font-size: 16px !important;
 }
 
 input:focus,

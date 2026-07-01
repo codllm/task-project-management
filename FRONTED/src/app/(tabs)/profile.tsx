@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { useApp } from "../../context/AppContext";
 import { updateProfileApi, updatePreferencesApi, uploadAvatarApi } from "../../api/user.api";
+import { createUploadFormData } from "../../utils/uploadFormData";
 
 const THEME_COLORS = [
   { name: "Indigo", color: "#6366F1" },   // Modern primary
@@ -59,7 +60,12 @@ export default function ProfileScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selectedImg = result.assets[0];
-        await handleUploadImage(selectedImg.uri);
+        await handleUploadImage(
+          selectedImg.uri,
+          selectedImg.fileName || `avatar_${Date.now()}.jpg`,
+          selectedImg.mimeType || "image/jpeg",
+          selectedImg.file
+        );
       }
     } catch (err) {
       console.error("Image picking error:", err);
@@ -67,19 +73,10 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleUploadImage = async (uri: string) => {
+  const handleUploadImage = async (uri: string, name: string, type: string, file?: File) => {
     setUploadingAvatar(true);
     try {
-      const formData = new FormData();
-      const filename = uri.split("/").pop() || "avatar.jpg";
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
-
-      formData.append("avatar", {
-        uri,
-        name: filename,
-        type,
-      } as any);
+      const formData = await createUploadFormData({ uri, name, type, file, fieldName: "avatar" });
 
       const res = await uploadAvatarApi(formData);
       if (res.success) {

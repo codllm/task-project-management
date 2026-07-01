@@ -2181,7 +2181,7 @@ export default function TasksScreen() {
         const a = result.assets[0];
         const fileName = generateImageName(a.fileName);
         const mimeType = a.mimeType || "image/jpeg";
-        await handleUpload(a.uri, fileName, mimeType);
+        await handleUpload(a.uri, fileName, mimeType, undefined, a.file);
       }
     } catch (err) {
       console.error("Image pick error:", err);
@@ -2195,18 +2195,18 @@ export default function TasksScreen() {
         const a = result.assets[0];
         const name = a.name || "document.pdf";
         const mimeType = a.mimeType || "application/octet-stream";
-        await handleUpload(a.uri, name, mimeType);
+        await handleUpload(a.uri, name, mimeType, undefined, a.file);
       }
     } catch (err) {
       console.error("Document pick error:", err);
     }
   };
 
-  const handleUpload = async (uri: string, name: string, mimeType: string, desc?: string) => {
+  const handleUpload = async (uri: string, name: string, mimeType: string, desc?: string, file?: File) => {
     if (!selectedTask) return;
     setUploading(true);
     try {
-      const formData = await createUploadFormData({ uri, name, type: mimeType });
+      const formData = await createUploadFormData({ uri, name, type: mimeType, file });
       const res = await uploadFile(formData);
       if (res.success) {
         const updateRes = await updateTask(selectedTask._id, {
