@@ -151,6 +151,13 @@ export const updateTaskService = async (taskId: string, data: any, updaterId?: s
   }
 
   const { newAttachments, ...updateData } = data;
+  const attachmentsToAdd =
+    Array.isArray(newAttachments) && newAttachments.length > 0
+      ? newAttachments.map((attachment: any) => ({
+          ...attachment,
+          uploadedBy: attachment.uploadedBy || updaterId,
+        }))
+      : [];
 
   if (updateData.recurring && updateData.recurring.isRecurring && !updateData.recurring.nextRun) {
     updateData.recurring.nextRun = calculateNextRun(updateData.recurring.frequency);
@@ -227,8 +234,8 @@ export const updateTaskService = async (taskId: string, data: any, updaterId?: s
   }
 
   let updateQuery: any = { $set: updateData };
-  if (newAttachments && newAttachments.length > 0) {
-    updateQuery.$push = { attachments: { $each: newAttachments } };
+  if (attachmentsToAdd.length > 0) {
+    updateQuery.$push = { attachments: { $each: attachmentsToAdd } };
   }
 
   const updatedTask = await TaskModel.findByIdAndUpdate(taskId, updateQuery, { new: true })
@@ -283,9 +290,9 @@ export const updateTaskService = async (taskId: string, data: any, updaterId?: s
   // Notify other task members about general task updates or attachments
   const assigneesList = updatedTask.assignedTo ? (updatedTask.assignedTo as any[]).map(a => a._id.toString()) : [];
   
-  if (newAttachments && newAttachments.length > 0) {
+  if (attachmentsToAdd.length > 0) {
     const title = "New Attachment on Task";
-    const message = `${newAttachments.length} new file(s) uploaded to task "${updatedTask.title}"`;
+    const message = `${attachmentsToAdd.length} new file(s) uploaded to task "${updatedTask.title}"`;
     const link = `/projects/${updatedTask.project}/tasks/${updatedTask._id}`;
 
     for (const assigneeId of assigneesList) {

@@ -338,6 +338,7 @@ export default function HomeScreen() {
           uri: asset.uri,
           name: asset.fileName || `logo_${Date.now()}.jpg`,
           type: asset.mimeType || "image/jpeg",
+          file: asset.file,
         });
         const uploadRes = await uploadFile(formData);
         if (uploadRes.success) {

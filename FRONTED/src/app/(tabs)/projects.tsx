@@ -317,6 +317,7 @@ export default function ProjectsScreen() {
           uri: asset.uri,
           name: asset.fileName || `cover_${Date.now()}.jpg`,
           type: asset.mimeType || "image/jpeg",
+          file: asset.file,
         });
         const uploadRes = await uploadFile(formData);
         if (uploadRes.success) {
